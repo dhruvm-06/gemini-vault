@@ -1,0 +1,8 @@
+{
+  "name": "Gemini Vault",
+  "description": "Privacy-first personal AI journal with memory synthesis, longitudinal reflection, and secure Firestore isolation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

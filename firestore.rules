@@ -1,7 +1,120 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function notModifying(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function onlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    // User Profile Document
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      
+      // Client creation: only allowed profile fields; no server-controlled metrics or account status
+      allow create: if isOwner(userId)
+        && onlyAllowedFields(['id', 'displayName', 'email', 'photoURL', 'preferences', 'createdAt'])
+        && request.resource.data.id == userId
+        && (
+          (request.auth.token.email != null && request.resource.data.email == request.auth.token.email) ||
+          (request.auth.token.email == null && request.resource.data.email == '')
+        );
+
+      // Client updates: only displayName, photoURL, preferences; protect immutable and server fields
+      allow update: if isOwner(userId)
+        && notModifying(['id', 'email', 'createdAt', 'lastLoginAt', 'accountStatus', 'usageMetrics']);
+
+      allow delete: if false;
+
+      // Journal Sessions Subcollection
+      match /sessions/{sessionId} {
+        allow read: if isOwner(userId);
+
+        // Client create: can only initialize active session with user-controlled fields
+        allow create: if isOwner(userId)
+          && onlyAllowedFields(['id', 'userId', 'title', 'draftContent', 'clientStartedAt', 'status'])
+          && request.resource.data.userId == userId
+          && request.resource.data.status == 'active';
+
+        // Client update: can ONLY update title and draftContent; all server-derived & immutable fields protected
+        allow update: if isOwner(userId)
+          && notModifying([
+            'id', 'userId', 'clientStartedAt', 'createdAt', 'endedAt',
+            'summary', 'keyInsights', 'mood', 'moodScore', 'tags', 'wordCount', 'status'
+          ]);
+
+        allow delete: if isOwner(userId);
+
+        // Messages Subcollection (Append-Only Audit Trail)
+        match /messages/{messageId} {
+          allow read: if isOwner(userId);
+
+          // Client can only create user messages with user content
+          allow create: if isOwner(userId)
+            && onlyAllowedFields(['id', 'role', 'content', 'clientTimestamp', 'timestamp'])
+            && request.resource.data.role == 'user';
+
+          // Messages cannot be edited or deleted individually by client
+          allow update, delete: if false;
+        }
+      }
+
+      // Memories Subcollection
+      match /memories/{memoryId} {
+        allow read: if isOwner(userId);
+
+        // Client create: manual memory creation must have confidence = 1.0; no fake server provenance
+        allow create: if isOwner(userId)
+          && onlyAllowedFields(['id', 'userId', 'fact', 'userNotes', 'category', 'confidence', 'isActive', 'createdAt'])
+          && request.resource.data.userId == userId
+          && request.resource.data.confidence == 1.0;
+
+        // Client update: can only edit fact text, user notes, or toggle active state
+        allow update: if isOwner(userId)
+          && notModifying(['id', 'userId', 'createdAt', 'sourceSessionId', 'extractedBy', 'confidence']);
+
+        allow delete: if isOwner(userId);
+      }
+
+      // Commitments Subcollection
+      match /commitments/{commitmentId} {
+        allow read: if isOwner(userId);
+
+        // Client create: manual commitment creation; cannot inject fake sourceSessionId or extractedContext
+        allow create: if isOwner(userId)
+          && onlyAllowedFields(['id', 'userId', 'title', 'status', 'targetDate', 'userNotes', 'createdAt', 'completedAt'])
+          && request.resource.data.userId == userId
+          && request.resource.data.status in ['pending', 'in_progress', 'completed', 'abandoned'];
+
+        // Client update: can only update status, targetDate, userNotes, completedAt; title and source metadata immutable
+        allow update: if isOwner(userId)
+          && notModifying(['id', 'userId', 'createdAt', 'title', 'sourceSessionId', 'extractedContext']);
+
+        allow delete: if isOwner(userId);
+      }
+
+      // Reflections Subcollection (Weekly & "What Changed?")
+      match /reflections/{reflectionId} {
+        allow read: if isOwner(userId);
+        // Reflections are generated and written strictly by server Admin SDK
+        allow create, update: if false;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Default global deny
     match /{document=**} {
       allow read, write: if false;
     }

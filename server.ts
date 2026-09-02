@@ -1,20 +1,36 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { requireAuth, AuthenticatedRequest } from './server/middleware/auth';
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Middleware
+  // Global Middleware
   app.use(express.json({ limit: '1mb' }));
 
-  // API Routes First
+  // Public Health Endpoint
   app.get('/api/health', (req, res) => {
     res.json({
       status: 'ok',
       service: 'gemini-vault',
       timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Protected Auth Verification Endpoint (Stage 2)
+  app.get('/api/auth/me', requireAuth, (req: AuthenticatedRequest, res) => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized', message: 'No user identity attached' });
+      return;
+    }
+
+    res.json({
+      uid: req.user.uid,
+      email: req.user.email,
+      name: req.user.name,
+      picture: req.user.picture,
     });
   });
 

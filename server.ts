@@ -1,7 +1,10 @@
+import 'dotenv/config';
+
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { requireAuth, AuthenticatedRequest } from './server/middleware/auth';
+import journalRouter from './server/routes/journal';
 
 async function startServer() {
   const app = express();
@@ -33,6 +36,9 @@ async function startServer() {
       picture: req.user.picture,
     });
   });
+
+  // Journal API Routes (Stage 3)
+  app.use('/api/journal', journalRouter);
 
   // Vite middleware for development vs static files for production
   if (process.env.NODE_ENV !== 'production') {

@@ -1,110 +1,102 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Shield,
-  Sparkles,
-  CheckCircle2,
-  Server,
-  Lock,
-  LogOut,
-  UserCheck,
-  AlertCircle,
-  X,
-  Code,
-  ShieldCheck,
-  Database,
-  ArrowRight,
-  Fingerprint,
-  RefreshCw
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Shield, Sparkles, Lock, Server, Fingerprint, AlertCircle, X } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
-import { firebaseDiagnostics } from './firebase';
+import { Navigation } from './components/Navigation';
+import { JournalHome } from './components/JournalHome';
+import { JournalSessionView } from './components/JournalSessionView';
 
 export default function App() {
   const {
     user,
-    userProfile,
     loading,
-    profileLoading,
     error,
-    profileError,
     signInWithGoogle,
-    signOutUser,
     getIdToken,
-    refreshProfile,
     clearError,
-    clearProfileError,
   } = useAuth();
 
-  const [apiMeResponse, setApiMeResponse] = useState<{
-    status: number;
-    data: unknown;
-    timestamp: string;
-  } | null>(null);
-  const [apiMeLoading, setApiMeLoading] = useState<boolean>(false);
-  const [unauthTestResponse, setUnauthTestResponse] = useState<{
-    status: number;
-    data: unknown;
-  } | null>(null);
-  const [unauthTestLoading, setUnauthTestLoading] = useState<boolean>(false);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('session');
+});
 
-  // Test authenticated /api/auth/me call
-  const testAuthenticatedEndpoint = async () => {
-    setApiMeLoading(true);
+const [initialPromptForSession, setInitialPromptForSession] =
+  useState<string | undefined>(undefined);
+
+const [isCreatingSession, setIsCreatingSession] = useState(false);
+
+useEffect(() => {
+  const handlePopState = () => {
+    const params = new URLSearchParams(window.location.search);
+    setActiveSessionId(params.get('session'));
+    setInitialPromptForSession(undefined);
+  };
+
+  window.addEventListener('popstate', handlePopState);
+
+  return () => {
+    window.removeEventListener('popstate', handlePopState);
+  };
+}, []);
+
+  // Start a new reflection session
+  const handleStartNewSession = async (initialText?: string) => {
+    setIsCreatingSession(true);
     try {
       const token = await getIdToken();
-      if (!token) throw new Error('No Firebase ID token available');
+      if (!token) return;
 
-      const res = await fetch('/api/auth/me', {
+      const res = await fetch('/api/journal/session', {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          draftContent: initialText || '',
+        }),
       });
 
+      if (!res.ok) {
+        throw new Error('Failed to create new reflection session.');
+      }
+
       const data = await res.json();
-      setApiMeResponse({
-        status: res.status,
-        data,
-        timestamp: new Date().toLocaleTimeString(),
-      });
-    } catch (err: unknown) {
-      setApiMeResponse({
-        status: 500,
-        data: { error: err instanceof Error ? err.message : 'Unknown error' },
-        timestamp: new Date().toLocaleTimeString(),
-      });
+      const newSessionId = data.session?.id;
+      if (newSessionId) {
+  setInitialPromptForSession(initialText || undefined);
+  setActiveSessionId(newSessionId);
+
+  const url = new URL(window.location.href);
+  url.searchParams.set('session', newSessionId);
+  window.history.pushState({}, '', url);
+}
+    } catch (err) {
+      console.error('[App] Error creating new session:', err);
     } finally {
-      setApiMeLoading(false);
+      setIsCreatingSession(false);
     }
   };
 
-  // Test unauthenticated call to verify 401 Unauthorized rejection
-  const testUnauthenticatedEndpoint = async () => {
-    setUnauthTestLoading(true);
-    try {
-      const res = await fetch('/api/auth/me');
-      const data = await res.json();
-      setUnauthTestResponse({
-        status: res.status,
-        data,
-      });
-    } catch (err: unknown) {
-      setUnauthTestResponse({
-        status: 500,
-        data: { error: err instanceof Error ? err.message : 'Network error' },
-      });
-    } finally {
-      setUnauthTestLoading(false);
-    }
-  };
+  // Resume an existing reflection session
+  const handleResumeSession = (sessionId: string) => {
+  setInitialPromptForSession(undefined);
+  setActiveSessionId(sessionId);
 
-  useEffect(() => {
-    if (user) {
-      testAuthenticatedEndpoint();
-    } else {
-      setApiMeResponse(null);
-      setUnauthTestResponse(null);
-    }
-  }, [user]);
+  const url = new URL(window.location.href);
+  url.searchParams.set('session', sessionId);
+  window.history.pushState({}, '', url);
+};
+
+  // Return to the reflection home list
+  const handleBackToHome = () => {
+  setActiveSessionId(null);
+  setInitialPromptForSession(undefined);
+
+  const url = new URL(window.location.href);
+  url.searchParams.delete('session');
+  window.history.pushState({}, '', url);
+};
 
   // Loading State
   if (loading && !user) {
@@ -115,8 +107,8 @@ export default function App() {
             <Shield className="w-6 h-6 animate-pulse" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-stone-100">Connecting to Gemini Vault</h2>
-            <p className="text-xs text-stone-400 mt-1">Verifying cryptographic session state...</p>
+            <h2 className="text-base font-serif font-medium text-stone-100">Opening Gemini Vault</h2>
+            <p className="text-xs text-stone-400 mt-1">Authenticating encrypted session...</p>
           </div>
           <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
         </div>
@@ -130,58 +122,51 @@ export default function App() {
       <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col justify-between selection:bg-amber-500 selection:text-stone-950 font-sans">
         {/* Header */}
         <header className="border-b border-stone-800 bg-stone-950/80 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                <Shield className="w-5 h-5" />
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Shield className="w-4 h-4" />
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="font-semibold tracking-tight text-stone-100 text-lg">Gemini Vault</span>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-stone-800 text-amber-400 border border-stone-700">
-                  Stage 2: Auth
-                </span>
-              </div>
+              <span className="font-serif font-medium tracking-tight text-stone-100 text-lg">Gemini Vault</span>
             </div>
-
-            <div className="flex items-center space-x-2 text-xs font-mono text-stone-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>Project: gemini-vault-507219</span>
+            <div className="text-xs font-serif text-stone-400">
+              Private Socratic AI Journal
             </div>
           </div>
         </header>
 
         {/* Hero Landing */}
-        <main className="max-w-5xl mx-auto px-6 py-16 flex-1 flex flex-col justify-center items-center text-center">
+        <main className="max-w-4xl mx-auto px-6 py-16 flex-1 flex flex-col justify-center items-center text-center">
           {error && (
-            <div className="mb-8 w-full max-w-md p-4 rounded-xl bg-rose-950/50 border border-rose-800/80 text-rose-300 text-xs flex items-start justify-between text-left">
+            <div className="mb-8 w-full max-w-md p-4 rounded-xl bg-rose-950/50 border border-rose-800/80 text-rose-300 text-xs flex items-start justify-between text-left font-sans">
               <div className="flex items-start space-x-2.5">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-semibold block text-rose-200">Authentication Error</span>
+                  <span className="font-semibold block text-rose-200">Authentication Notice</span>
                   <p className="mt-0.5">{error}</p>
                 </div>
               </div>
               <button
                 onClick={clearError}
                 className="text-rose-400 hover:text-rose-200 p-1 -mr-1 -mt-1 cursor-pointer"
-                aria-label="Dismiss error"
+                aria-label="Dismiss notice"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
 
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-stone-800/80 border border-stone-700 text-stone-300 text-xs font-medium mb-6">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Google Cloud Gen AI APAC Cohort 3 Ideathon</span>
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium mb-6">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Private Reflective Thought Environment</span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-stone-100 leading-tight max-w-3xl mb-6">
-            A Privacy-First Personal AI Journal That Grows With You
+          <h1 className="text-3xl sm:text-5xl font-serif font-normal tracking-tight text-stone-100 leading-tight max-w-2xl mb-6">
+            A reflective personal journal that helps you think clearly.
           </h1>
 
-          <p className="text-lg text-stone-400 max-w-2xl leading-relaxed mb-10">
-            Gemini Vault is a reflective, Socratic AI journal. All thoughts are protected with strict UID-based Firestore isolation, server-side Gemini intelligence, and durable personal memory.
+          <p className="text-sm sm:text-base text-stone-400 max-w-xl leading-relaxed mb-10 font-sans">
+            Engage in multi-turn Socratic dialogues, unpack nuanced thoughts, and reflect with a calm AI companion strictly isolated to your private account.
           </p>
 
           {/* Google Sign-In Button */}
@@ -190,9 +175,9 @@ export default function App() {
               onClick={signInWithGoogle}
               disabled={loading}
               id="google-signin-btn"
-              className="w-full h-12 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold flex items-center justify-center space-x-3 transition-all duration-150 shadow-lg shadow-amber-500/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-12 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold flex items-center justify-center space-x-3 transition-all duration-150 shadow-lg shadow-amber-500/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-sans text-sm"
             >
-              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -212,20 +197,20 @@ export default function App() {
               </svg>
               <span>Continue with Google</span>
             </button>
-            <p className="text-[11px] text-stone-500">
-              Secured via Firebase Authentication &bull; Zero password storage
+            <p className="text-[11px] text-stone-500 font-sans">
+              Passwordless &bull; Encrypted in Transit &bull; Private Isolation
             </p>
           </div>
 
           {/* Privacy & Architecture Feature Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl mt-16 text-left">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-3xl mt-16 text-left font-sans">
             <div className="p-5 rounded-xl bg-stone-950 border border-stone-800/80">
               <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-3">
                 <Lock className="w-4 h-4" />
               </div>
-              <h3 className="text-sm font-semibold text-stone-100 mb-1">UID Data Isolation</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-200 mb-1">Private Reflection</h3>
               <p className="text-xs text-stone-400 leading-relaxed">
-                Your entries and distilled memories are strictly bound to your authenticated UID via field-level Firestore rules.
+                Your entries and conversations are strictly isolated to your authenticated account.
               </p>
             </div>
 
@@ -233,9 +218,9 @@ export default function App() {
               <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3">
                 <Server className="w-4 h-4" />
               </div>
-              <h3 className="text-sm font-semibold text-stone-100 mb-1">Server-Side Gemini</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-200 mb-1">Socratic Companion</h3>
               <p className="text-xs text-stone-400 leading-relaxed">
-                Zero API keys exposed to browser. Conversational Socratic prompts run exclusively through Cloud Run proxies.
+                Gemini listens attentively, asking insightful follow-up questions without unsolicited advice.
               </p>
             </div>
 
@@ -243,22 +228,20 @@ export default function App() {
               <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-3">
                 <Fingerprint className="w-4 h-4" />
               </div>
-              <h3 className="text-sm font-semibold text-stone-100 mb-1">Protected Provenance</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-200 mb-1">Durable History</h3>
               <p className="text-xs text-stone-400 leading-relaxed">
-                Server-controlled fields like AI summaries, insight metrics, and memory confidence cannot be tampered with by clients.
+                Pick up where you left off at any time. Sessions remain saved and searchable in your personal vault.
               </p>
             </div>
           </div>
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-stone-800 py-6 bg-stone-950">
-          <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
+        <footer className="border-t border-stone-800 py-6 bg-stone-950 font-sans">
+          <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
             <div>&copy; 2026 Gemini Vault &mdash; Google Cloud Gen AI APAC Cohort 3</div>
-            <div className="flex items-center space-x-4 font-mono">
-              <span>Database: Firestore default</span>
-              <span>&bull;</span>
-              <span>Region: asia-south1</span>
+            <div className="text-stone-500">
+              Private Thought Sanctuary
             </div>
           </div>
         </footer>
@@ -266,385 +249,37 @@ export default function App() {
     );
   }
 
-  // Authenticated State (Protected Dashboard & Stage 2 Verification)
+  // Authenticated State (Multi-Turn Journaling Experience)
   return (
-    <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col justify-between selection:bg-amber-500 selection:text-stone-950 font-sans">
-      {/* Authenticated Navigation Bar */}
-      <header className="border-b border-stone-800 bg-stone-950/90 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-semibold tracking-tight text-stone-100 text-lg">Gemini Vault</span>
-              <span className="ml-2 text-xs font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/80">
-                Authenticated
-              </span>
-            </div>
-          </div>
+    <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col justify-between selection:bg-amber-500 selection:text-stone-950">
+      <Navigation onGoHome={handleBackToHome} />
 
-          {/* User Profile & Sign Out */}
-          <div className="flex items-center space-x-4">
-            <div className="hidden sm:flex items-center space-x-3 pr-3 border-r border-stone-800">
-              {user.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || 'User'}
-                  className="w-8 h-8 rounded-full border border-stone-700"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 font-semibold flex items-center justify-center text-xs border border-amber-500/30">
-                  {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
-                </div>
-              )}
-              <div className="text-left">
-                <div className="text-xs font-medium text-stone-200">{user.displayName || 'Vault Keeper'}</div>
-                <div className="text-[11px] font-mono text-stone-500 truncate max-w-[150px]">{user.email}</div>
-              </div>
-            </div>
-
-            <button
-              onClick={signOutUser}
-              id="signout-btn"
-              className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-stone-100 text-xs font-medium flex items-center space-x-1.5 transition-colors border border-stone-700 cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Authenticated Dashboard */}
-      <main className="max-w-6xl mx-auto px-6 py-10 flex-1 w-full">
-        {/* Welcome Banner */}
-        <div className="p-6 rounded-2xl bg-gradient-to-r from-stone-950 to-stone-900 border border-stone-800 mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center space-x-2 text-xs font-mono text-amber-400 mb-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>AUTHENTICATED SESSION ACTIVE</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-stone-100">
-                Welcome back, {user.displayName || 'Vault Keeper'}
-              </h1>
-              <p className="text-xs text-stone-400 mt-1 max-w-xl">
-                Your authenticated user identity is verified. Firestore user document is provisioned under your private UID scope.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-start md:items-end space-y-1 text-xs font-mono bg-stone-900/80 p-3 rounded-lg border border-stone-800">
-              <div className="text-stone-400">Verified Identity:</div>
-              <div className="text-amber-400 font-bold break-all max-w-[280px]">{user.uid}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Development State Diagnostics Panel */}
-        <div className="mb-6 p-4 rounded-xl bg-stone-950 border border-stone-800 text-xs font-mono">
-          <div className="flex items-center justify-between mb-2 pb-2 border-b border-stone-800">
-            <span className="text-amber-400 font-semibold flex items-center space-x-1.5">
-              <Code className="w-3.5 h-3.5" />
-              <span>Development State Diagnostics</span>
-            </span>
-            <span className="text-stone-500 text-[10px]">Zero Tokens/Secrets Exposed</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] mb-3">
-            <div className="p-2 rounded bg-stone-900/80 border border-stone-800">
-              <div className="text-stone-500 text-[10px]">user.uid</div>
-              <div className="text-stone-200 truncate font-semibold">{user.uid}</div>
-            </div>
-            <div className="p-2 rounded bg-stone-900/80 border border-stone-800">
-              <div className="text-stone-500 text-[10px]">profileLoading</div>
-              <div className={profileLoading ? 'text-amber-400 font-semibold' : 'text-stone-400'}>
-                {profileLoading ? 'true' : 'false'}
-              </div>
-            </div>
-            <div className="p-2 rounded bg-stone-900/80 border border-stone-800">
-              <div className="text-stone-500 text-[10px]">userProfile !== null</div>
-              <div className={userProfile !== null ? 'text-emerald-400 font-semibold' : 'text-rose-400'}>
-                {userProfile !== null ? 'true (Loaded)' : 'false (Not Loaded)'}
-              </div>
-            </div>
-            <div className="p-2 rounded bg-stone-900/80 border border-stone-800">
-              <div className="text-stone-500 text-[10px]">profileError</div>
-              <div className={profileError ? 'text-rose-400 font-semibold' : 'text-emerald-400'}>
-                {profileError ? (profileError.code || 'Error') : 'null'}
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-stone-400 pt-2 border-t border-stone-800/60">
-            <div>
-              Project: <span className="text-stone-200 font-semibold">{firebaseDiagnostics.projectId}</span>
-            </div>
-            <div>
-              Database ID: <span className="text-amber-400 font-semibold">{firebaseDiagnostics.databaseId}</span>
-            </div>
-            <div>
-              Online: <span className="text-emerald-400 font-semibold">{firebaseDiagnostics.isOnline ? 'Yes' : 'No'}</span>
-            </div>
-            <div>
-              Transport: <span className="text-amber-300 font-semibold">{firebaseDiagnostics.transport}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stage 2 Diagnostics Deck */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Firestore Document Status */}
-          <div className="bg-stone-950 border border-stone-800 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2 text-stone-200 font-medium">
-                <Database className="w-4 h-4 text-amber-400" />
-                <span>Firestore Profile Document</span>
-              </div>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/80">
-                /users/{user.uid.slice(0, 6)}...
-              </span>
-            </div>
-
-            {profileLoading ? (
-              /* State A: profileLoading === true */
-              <div className="py-6 text-stone-300 text-xs font-mono flex flex-col items-center justify-center space-y-3 p-4 rounded-lg bg-stone-900/60 border border-stone-800">
-                <span className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></span>
-                <span>Loading your profile...</span>
-              </div>
-            ) : profileError ? (
-              /* State B: profileLoading === false && profileError exists */
-              <div className="space-y-3 text-xs">
-                <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/80 text-rose-300 space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span className="font-semibold text-rose-200">
-                      Your account is signed in, but your profile could not be saved.
-                    </span>
-                  </div>
-                  {profileError.code && (
-                    <div className="font-mono text-[11px] text-rose-400/90 pl-6">
-                      Firebase Error: <span className="font-semibold">{profileError.code}</span>
-                    </div>
-                  )}
-                  <div className="text-[11px] text-rose-300/80 pl-6 leading-relaxed">
-                    {profileError.message}
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => refreshProfile()}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Retry Profile Initialization</span>
-                  </button>
-                  <button
-                    onClick={clearProfileError}
-                    className="text-stone-400 hover:text-stone-200 text-xs underline cursor-pointer"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            ) : userProfile ? (
-              /* State C: profileLoading === false && userProfile exists */
-              <div className="space-y-3 text-xs">
-                <div className="p-3 rounded-lg bg-stone-900/80 border border-stone-800/80 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-stone-400">Owner UID:</span>
-                    <span className="font-mono text-stone-200 font-semibold">{userProfile.id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-stone-400">Display Name:</span>
-                    <span className="text-stone-200">{userProfile.displayName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-stone-400">Email:</span>
-                    <span className="text-stone-200">{userProfile.email}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-stone-400">Theme Preference:</span>
-                    <span className="text-stone-200 uppercase font-mono">{userProfile.preferences?.theme || 'dark'}</span>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2 text-emerald-400 text-xs">
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Document initialized and compliant with field-level rules.</span>
-                </div>
-              </div>
-            ) : (
-              /* State D: Unexpected state (never an infinite spinner) */
-              <div className="space-y-3 text-xs">
-                <div className="p-3 rounded-lg bg-stone-900/60 border border-stone-800 text-stone-400 space-y-1">
-                  <div className="font-semibold text-stone-300">Profile document is not yet in memory.</div>
-                  <p className="text-[11px] text-stone-500">
-                    The document read settled without error, but userProfile state is unpopulated.
-                  </p>
-                </div>
-                <button
-                  onClick={() => refreshProfile()}
-                  className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium flex items-center space-x-1.5 border border-stone-700 cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Force Profile Reload</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Backend Token Verification Endpoint Card */}
-          <div className="bg-stone-950 border border-stone-800 rounded-xl p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2 text-stone-200 font-medium">
-                  <Server className="w-4 h-4 text-amber-400" />
-                  <span>Backend Token Verification</span>
-                </div>
-                <button
-                  onClick={testAuthenticatedEndpoint}
-                  disabled={apiMeLoading}
-                  className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-stone-100 text-xs font-mono transition-colors border border-stone-700 cursor-pointer disabled:opacity-50"
-                >
-                  {apiMeLoading ? 'Verifying...' : 'Test /api/auth/me'}
-                </button>
-              </div>
-
-              {apiMeResponse ? (
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 text-xs">
-                    <span
-                      className={`font-mono px-2 py-0.5 rounded font-semibold ${
-                        apiMeResponse.status === 200
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/80'
-                          : 'bg-rose-950 text-rose-400 border border-rose-800/80'
-                      }`}
-                    >
-                      HTTP {apiMeResponse.status}
-                    </span>
-                    <span className="text-stone-400 text-[11px]">Verified at {apiMeResponse.timestamp}</span>
-                  </div>
-                  <pre className="p-3 rounded-lg bg-stone-900 border border-stone-800 font-mono text-[11px] text-stone-300 overflow-x-auto">
-                    {JSON.stringify(apiMeResponse.data, null, 2)}
-                  </pre>
-                </div>
-              ) : (
-                <div className="py-4 text-stone-500 text-xs font-mono">
-                  Press &quot;Test /api/auth/me&quot; to test Firebase ID token verification.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-stone-800/80 text-[11px] font-mono text-stone-500">
-              Auth Header: Bearer &lt;Firebase_ID_Token&gt;
-            </div>
-          </div>
-        </div>
-
-        {/* Security & Authorization Testing Deck */}
-        <div className="bg-stone-950 border border-stone-800 rounded-xl p-6 mb-8">
-          <div className="flex items-center space-x-2 text-stone-200 font-medium mb-4">
-            <Shield className="w-4 h-4 text-amber-400" />
-            <span>Interactive Security & Unauthorized Rejection Verification</span>
-          </div>
-
-          <p className="text-xs text-stone-400 mb-4 max-w-2xl">
-            Verify that protected server routes strictly reject anonymous requests with HTTP 401 Unauthorized, while authenticated requests pass with verified UID identity derivation.
-          </p>
-
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <button
-              onClick={testUnauthenticatedEndpoint}
-              disabled={unauthTestLoading}
-              className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800 text-xs font-medium flex items-center space-x-2 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <Code className="w-3.5 h-3.5" />
-              <span>Simulate Unauthenticated Request (No Token)</span>
-            </button>
-          </div>
-
-          {unauthTestResponse && (
-            <div className="p-3 rounded-lg bg-stone-900 border border-stone-800 text-xs font-mono">
-              <div className="flex items-center space-x-2 mb-1.5">
-                <span className="font-semibold text-rose-400">Response: HTTP {unauthTestResponse.status}</span>
-                <span className="text-stone-500">&mdash; Correctly rejected by requireAuth middleware</span>
-              </div>
-              <pre className="text-[11px] text-stone-400">
-                {JSON.stringify(unauthTestResponse.data, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-
-        {/* Stage 2 Completion Checklist */}
-        <div className="bg-stone-950/80 border border-stone-800 rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-stone-200 uppercase tracking-wider mb-4 flex items-center space-x-2">
-            <UserCheck className="w-4 h-4 text-emerald-400" />
-            <span>Stage 2 Milestones Completed</span>
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-            <div className="p-3 rounded-lg bg-stone-900/60 border border-stone-800 flex items-start space-x-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-stone-200">Firebase Auth Initialized</div>
-                <p className="text-stone-500 text-[11px] mt-0.5">Google Sign-In with popup & session persistence</p>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-stone-900/60 border border-stone-800 flex items-start space-x-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-stone-200">User Document Scoping</div>
-                <p className="text-stone-500 text-[11px] mt-0.5">Provisioned strictly under /users/{'{uid}'}</p>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-stone-900/60 border border-stone-800 flex items-start space-x-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-stone-200">ID Token Verification</div>
-                <p className="text-stone-500 text-[11px] mt-0.5">Protected GET /api/auth/me rejecting 401s</p>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-stone-900/60 border border-stone-800 flex items-start space-x-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-stone-200">Field-Level Rules (v3)</div>
-                <p className="text-stone-500 text-[11px] mt-0.5">Server-derived & immutable fields protected</p>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-stone-900/60 border border-stone-800 flex items-start space-x-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-stone-200">Recursive Sanitizer</div>
-                <p className="text-stone-500 text-[11px] mt-0.5">Zero undefined values reaching Firestore</p>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-stone-900/60 border border-amber-500/30 flex items-start space-x-2.5 bg-amber-500/5">
-              <ArrowRight className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-amber-300">Ready for Stage 3</div>
-                <p className="text-amber-400/80 text-[11px] mt-0.5">Socratic Multi-Turn Chat Engine</p>
-              </div>
-            </div>
-          </div>
-        </div>
+      <main className="flex-1 w-full">
+        {activeSessionId ? (
+          <JournalSessionView
+            sessionId={activeSessionId}
+            onBack={handleBackToHome}
+            initialPrompt={initialPromptForSession}
+          />
+        ) : (
+          <JournalHome
+            onStartNewSession={handleStartNewSession}
+            onResumeSession={handleResumeSession}
+            isCreating={isCreatingSession}
+          />
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-stone-800 py-6 bg-stone-950">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
-          <div>&copy; 2026 Gemini Vault &mdash; Google Cloud Gen AI APAC Cohort 3</div>
-          <div className="flex items-center space-x-4 font-mono">
-            <span>Project: gemini-vault-507219</span>
-            <span>&bull;</span>
-            <span>Status: Stage 2 Complete</span>
+      {!activeSessionId && (
+        <footer className="border-t border-stone-800 py-6 bg-stone-950 font-sans">
+          <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
+            <div>&copy; 2026 Gemini Vault &mdash; Google Cloud Gen AI APAC Cohort 3</div>
+            <div className="text-stone-500 font-serif">
+              Your private space to think clearly
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

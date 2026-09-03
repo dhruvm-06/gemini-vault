@@ -19,3 +19,39 @@ export interface AuthenticatedUser {
   name: string | null;
   photoURL?: string | null;
 }
+
+export interface JournalMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  clientTimestamp?: string;
+  timestamp?: unknown;
+}
+
+export interface JournalSession {
+  id: string;
+  userId: string;
+  title: string;
+  draftContent?: string;
+  clientStartedAt?: string;
+  createdAt?: unknown;
+  status: 'active' | 'completed' | 'abandoned';
+  endedAt?: unknown;
+  wordCount?: number;
+  summary?: string;
+  keyInsights?: string[];
+  mood?: string;
+  moodScore?: number;
+  tags?: string[];
+}
+
+export interface JournalChatRequest {
+  sessionId: string;
+  message: string;
+  clientMessageId?: string;
+}
+
+export interface JournalChatResponse {
+  userMessage: JournalMessage;
+  assistantMessage: JournalMessage;
+}

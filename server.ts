@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { securityHeaders } from './server/middleware/securityHeaders';
 import { requireAuth, AuthenticatedRequest } from './server/middleware/auth';
 import journalRouter from './server/routes/journal';
 import memoriesRouter from './server/routes/memories';
@@ -10,6 +11,7 @@ async function startServer() {
   const PORT = 3000;
 
   // Global Middleware
+  app.use(securityHeaders);
   app.use(express.json({ limit: '1mb' }));
 
   // Public Health Endpoint

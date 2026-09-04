@@ -10,19 +10,388 @@ import {
   X,
   RotateCcw,
   User,
-  ShieldCheck,
-  Lock
+  Lock,
+  Calendar,
+  Bell,
+  Clock,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { JournalSession, JournalMessage } from '../types';
+import { JournalSession, JournalMessage, ContextRailItem } from '../types';
 import { FormattedResponse } from './FormattedResponse';
 import { MemoryReviewSection } from './MemoryReviewSection';
+
+/* ============================================================================
+   Presentational Decomposition Components
+   (Strictly rendering layers — all state and orchestration remain in JournalSessionView)
+   ============================================================================ */
+
+export type SessionWithContinuation = JournalSession & {
+  continuedFromSessionId?: string | null;
+  rootSessionId?: string | null;
+  updatedAt?: unknown;
+};
+
+interface ReflectHeaderProps {
+  session: SessionWithContinuation | null;
+  isCompleted: boolean;
+  isEditingTitle: boolean;
+  editTitleValue: string;
+  onBack: () => void;
+  onStartEditTitle: () => void;
+  onSaveTitle: () => void;
+  onCancelEditTitle: () => void;
+  onTitleChange: (value: string) => void;
+  onOpenConcludeModal: () => void;
+}
+
+export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
+  session,
+  isCompleted,
+  isEditingTitle,
+  editTitleValue,
+  onBack,
+  onStartEditTitle,
+  onSaveTitle,
+  onCancelEditTitle,
+  onTitleChange,
+  onOpenConcludeModal,
+}) => {
+  const isContinued = Boolean(session?.continuedFromSessionId);
+
+  return (
+    <header className="px-4 sm:px-6 py-3.5 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-surface-base)]/85 backdrop-blur-md flex items-center justify-between shrink-0 z-20 transition-colors">
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          onClick={onBack}
+          className="p-1.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] transition cursor-pointer shrink-0"
+          aria-label="Back to Reflections"
+          title="Back to Reflections"
+        >
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+
+        {isEditingTitle ? (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <input
+              type="text"
+              value={editTitleValue}
+              onChange={(e) => onTitleChange(e.target.value)}
+              className="px-2.5 py-1 rounded-lg bg-[var(--gv-surface-raised)] border border-[var(--gv-accent)] text-[var(--gv-text-primary)] text-sm focus:outline-none font-medium min-w-[200px]"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onSaveTitle();
+                if (e.key === 'Escape') onCancelEditTitle();
+              }}
+              aria-label="Edit reflection title"
+            />
+            <button
+              type="button"
+              onClick={onSaveTitle}
+              className="p-1 rounded-md bg-[var(--gv-accent)] text-white hover:opacity-90 transition cursor-pointer"
+              aria-label="Save title"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onCancelEditTitle}
+              className="p-1 rounded-md bg-[var(--gv-surface-raised)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+              aria-label="Cancel editing"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="font-serif text-sm sm:text-base font-medium text-[var(--gv-text-primary)] truncate max-w-xs sm:max-w-md md:max-w-lg">
+                {session?.title || 'Reflection Session'}
+              </h1>
+              {!isCompleted && (
+                <button
+                  type="button"
+                  onClick={onStartEditTitle}
+                  className="p-1 text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer shrink-0"
+                  aria-label="Edit title"
+                  title="Rename reflection"
+                >
+                  <Edit2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {isContinued && (
+              <div className="flex items-center gap-1 text-[11px] text-[var(--gv-accent)] font-sans">
+                <RotateCcw className="w-2.5 h-2.5" />
+                <span className="truncate">Continued from previous reflection</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="hidden md:flex items-center gap-1 text-[11px] text-[var(--gv-text-tertiary)] px-2 py-0.5 rounded-md bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)]">
+          <Lock className="w-2.5 h-2.5 text-[var(--gv-accent)]" />
+          <span>Private Vault</span>
+        </div>
+
+        {isCompleted ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--gv-success-muted)] border border-[var(--gv-success-border)] text-[var(--gv-success)] text-[11px] font-sans font-medium">
+            <CheckCircle2 className="w-3 h-3" />
+            <span>Concluded</span>
+          </span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] text-[11px] font-sans font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse"></span>
+              <span>Active</span>
+            </span>
+
+            <button
+              type="button"
+              onClick={onOpenConcludeModal}
+              id="conclude-reflection-btn"
+              className="px-3 py-1 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs"
+            >
+              Conclude
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+};
+
+export interface CommitmentSignal {
+  id: string;
+  fact: string;
+  deadline?: string;
+}
+
+interface CommitmentCardProps {
+  commitment: CommitmentSignal;
+  onAddReminder?: (commitment: CommitmentSignal) => void;
+  onDismiss?: (id: string) => void;
+}
+
+export const CommitmentCard: React.FC<CommitmentCardProps> = ({
+  commitment,
+  onAddReminder,
+  onDismiss,
+}) => {
+  const [calendarNotice, setCalendarNotice] = useState(false);
+
+  return (
+    <div className="my-4 p-4 rounded-2xl border border-[var(--gv-accent-border)] bg-[var(--gv-surface-ground)]/90 text-xs font-sans shadow-xs animate-turn-enter">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--gv-accent)]">
+          <Sparkles className="w-3 h-3 text-[var(--gv-accent-gold)]" />
+          <span>Commitment detected</span>
+        </div>
+        {commitment.deadline && (
+          <span className="text-[10px] text-[var(--gv-text-tertiary)] flex items-center gap-1">
+            <Clock className="w-2.5 h-2.5" />
+            {commitment.deadline}
+          </span>
+        )}
+      </div>
+
+      <p className="mt-2 font-serif text-sm text-[var(--gv-text-primary)] leading-relaxed">
+        &ldquo;{commitment.fact}&rdquo;
+      </p>
+
+      {calendarNotice && (
+        <div className="mt-2 text-[11px] text-[var(--gv-accent-text)] bg-[var(--gv-accent-muted)] p-2 rounded-lg border border-[var(--gv-accent-border)]">
+          Calendar scheduling will be available in Stage 9 (Commitments & Calendar).
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center gap-2">
+        {onAddReminder && (
+          <button
+            type="button"
+            onClick={() => onAddReminder(commitment)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--gv-accent)] text-white text-[11px] font-medium hover:opacity-90 transition cursor-pointer"
+          >
+            <Bell className="w-3 h-3" />
+            <span>Add reminder</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setCalendarNotice(true)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-[11px] font-medium transition cursor-pointer"
+        >
+          <Calendar className="w-3 h-3" />
+          <span>Add to Calendar</span>
+        </button>
+
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={() => onDismiss(commitment.id)}
+            className="ml-auto text-[11px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)] transition cursor-pointer px-2 py-1"
+          >
+            Dismiss
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface TurnItemProps {
+  message: JournalMessage;
+  isLatest: boolean;
+  registerRef?: (node: HTMLDivElement | null) => void;
+}
+
+export const TurnItem: React.FC<TurnItemProps> = ({ message, isLatest, registerRef }) => {
+  const isUser = message.role === 'user';
+
+  if (isUser) {
+    return (
+      <div
+        ref={registerRef}
+        className="w-full flex flex-col items-start my-6 animate-turn-enter"
+      >
+        <div className="w-full pl-4 sm:pl-5 border-l-2 border-[var(--gv-border-strong)] transition-colors">
+          <div className="flex items-center gap-1.5 text-[11px] text-[var(--gv-text-tertiary)] font-sans uppercase tracking-wider mb-1.5">
+            <User className="w-3 h-3 text-[var(--gv-text-tertiary)]" />
+            <span className="font-medium">You</span>
+          </div>
+
+          <div className="text-sm sm:text-[15px] font-sans text-[var(--gv-text-primary)] leading-relaxed whitespace-pre-wrap">
+            {message.content}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={registerRef}
+      className="w-full flex flex-col items-start my-7 animate-turn-enter transition-colors"
+    >
+      <div className="flex items-center gap-2 text-xs font-sans text-[var(--gv-accent)] mb-2.5">
+        <div className="w-5 h-5 rounded-full bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center text-[var(--gv-accent-gold)] shrink-0">
+          <Sparkles className="w-3 h-3" />
+        </div>
+        <span className="font-serif font-medium tracking-wide text-xs text-[var(--gv-text-secondary)]">
+          Gemini Vault
+        </span>
+      </div>
+
+      <div
+        className={`w-full font-serif text-[15px] sm:text-[17px] leading-[1.8] ${
+          isLatest ? 'text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-secondary)]'
+        }`}
+      >
+        <FormattedResponse content={message.content} />
+      </div>
+    </div>
+  );
+};
+
+interface ReflectComposerProps {
+  inputText: string;
+  isSending: boolean;
+  isCompleted: boolean;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  onInputChange: (value: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onSend: () => void;
+  onContinueSession?: () => void;
+}
+
+export const ReflectComposer: React.FC<ReflectComposerProps> = ({
+  inputText,
+  isSending,
+  isCompleted,
+  textareaRef,
+  onInputChange,
+  onKeyDown,
+  onSend,
+  onContinueSession,
+}) => {
+  if (isCompleted) {
+    return (
+      <div className="p-4 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] text-center space-y-3 shadow-xs">
+        <div className="space-y-1">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-[var(--gv-success)]">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>This reflection is concluded and archived.</span>
+          </div>
+          <p className="text-[11px] text-[var(--gv-text-tertiary)] font-sans">
+            All messages remain securely preserved in your personal vault.
+          </p>
+        </div>
+
+        {onContinueSession && (
+          <div className="pt-1">
+            <button
+              type="button"
+              id="continue-reflection-btn"
+              onClick={onContinueSession}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--gv-accent)] hover:opacity-90 text-white text-xs font-semibold transition cursor-pointer shadow-xs"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Continue Reflection</span>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="relative rounded-2xl bg-[var(--gv-surface-base)] border border-[var(--gv-border-default)] focus-within:border-[var(--gv-accent)] focus-within:ring-2 focus-within:ring-[var(--gv-focus-ring)] transition shadow-sm">
+        <textarea
+          ref={textareaRef}
+          value={inputText}
+          onChange={(e) => onInputChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="Continue your reflection... (Enter to send, Shift+Enter for newline)"
+          rows={1}
+          disabled={isSending}
+          className="w-full p-3.5 sm:p-4 pr-14 bg-transparent text-[var(--gv-text-primary)] placeholder-[var(--gv-text-muted)] text-sm focus:outline-none resize-none font-sans leading-relaxed max-h-[220px]"
+          aria-label="Reflection composer input"
+        />
+
+        <button
+          type="button"
+          onClick={onSend}
+          disabled={!inputText.trim() || isSending}
+          id="send-message-btn"
+          className="absolute right-2.5 bottom-2.5 p-2 rounded-xl bg-[var(--gv-accent)] text-white hover:opacity-90 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+          aria-label="Send message"
+          title="Send message"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between px-1 text-[11px] text-[var(--gv-text-tertiary)] font-sans select-none">
+        <span>
+          Press <kbd className="px-1.5 py-0.5 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-text-secondary)] font-mono text-[10px]">Return</kbd> to send, <kbd className="px-1.5 py-0.5 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-text-secondary)] font-mono text-[10px]">Shift+Return</kbd> for newline
+        </span>
+        <span className="hidden sm:inline">Encrypted in personal vault isolation</span>
+      </div>
+    </div>
+  );
+};
 
 interface JournalSessionViewProps {
   sessionId: string;
   onBack: () => void;
   onContinueSession?: (sessionId: string) => Promise<void>;
   initialPrompt?: string;
+  onContextItemsChange?: (items: ContextRailItem[]) => void;
 }
 
 export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
@@ -30,10 +399,11 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   onBack,
   onContinueSession,
   initialPrompt,
+  onContextItemsChange,
 }) => {
   const { getIdToken } = useAuth();
 
-  const [session, setSession] = useState<JournalSession | null>(null);
+  const [session, setSession] = useState<SessionWithContinuation | null>(null);
   const [messages, setMessages] = useState<JournalMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loadingSession, setLoadingSession] = useState(true);
@@ -90,7 +460,9 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 
       const target = event.target as HTMLElement | null;
       const isFormControl =
-        target?.closest('input, textarea, select, button, a, [contenteditable="true"]');
+        target && target instanceof Element
+          ? target.closest('input, textarea, select, button, a, [contenteditable="true"]')
+          : false;
 
       // Never hijack typing that is intentionally happening in another control.
       if (isFormControl) return;
@@ -198,6 +570,66 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
       requestAnimationFrame(() => scrollToBottom('auto'));
     }
   }, [loadingSession, sessionId]);
+
+  // Feed session metadata and contextual next turns to the contextual rail
+  useEffect(() => {
+    if (!onContextItemsChange) return;
+
+    if (!session && messages.length === 0) {
+      onContextItemsChange([]);
+      return;
+    }
+
+    const items: ContextRailItem[] = [];
+
+    // 1. Session Stream Context
+    const isContinued = Boolean(session?.continuedFromSessionId);
+    items.push({
+      id: `ctx-session-${sessionId}`,
+      kind: 'evidence',
+      title: session?.title || 'Active Reflection',
+      body: isContinued
+        ? 'Continued from an earlier reflection thread. Vault continuity and provenance linked.'
+        : `${messages.length} message${messages.length === 1 ? '' : 's'} recorded. Vault memory isolation active.`,
+      timestamp: session?.clientStartedAt
+        ? new Date(session.clientStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : typeof session?.createdAt === 'string'
+        ? new Date(session.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : undefined,
+    });
+
+    // 2. Next suggested direction or state hint based on real conversation depth
+    if (session?.status === 'completed') {
+      items.push({
+        id: `ctx-status-${sessionId}`,
+        kind: 'memory',
+        title: 'Reflection Archived',
+        body: 'This reflection is preserved in your vault. You can review saved memories or start a continuation thread.',
+        actionLabel: 'Review Vault Memories',
+        onAction: () => setIsReviewingMemories(true),
+      });
+    } else if (messages.length >= 2) {
+      items.push({
+        id: `ctx-direction-${sessionId}`,
+        kind: 'prompt',
+        title: 'Deepen Perspective',
+        body: 'What is the most significant insight or question that has emerged for you in this reflection so far?',
+        actionLabel: 'Explore this insight',
+        onAction: () => {
+          setInputText('Looking at what we just discussed, the key insight that feels most important is: ');
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+          }
+        },
+      });
+    }
+
+    onContextItemsChange(items);
+
+    return () => {
+      onContextItemsChange([]);
+    };
+  }, [session, messages.length, sessionId, onContextItemsChange]);
 
   // When a follow-up message is sent, immediately bring the start of that
   // user turn into view while Gemini is generating the response.
@@ -416,9 +848,9 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 
   if (loadingSession) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center space-y-4 font-sans">
-        <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
-        <p className="text-xs text-stone-400 font-serif">Opening reflection session...</p>
+      <div className="max-w-xl mx-auto px-4 py-20 text-center space-y-4 font-sans">
+        <div className="w-8 h-8 border-2 border-[var(--gv-accent)] border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p className="text-xs text-[var(--gv-text-tertiary)] font-serif">Opening reflection session...</p>
       </div>
     );
   }
@@ -426,209 +858,130 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   const isCompleted = session?.status === 'completed';
 
   return (
-    <div
-      className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-4rem)]"
-    >
-    
-      {/* Session Header */}
-      <header className="pb-4 border-b border-stone-800 flex items-center justify-between shrink-0">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={onBack}
-            className="p-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-800 transition cursor-pointer"
-            aria-label="Back to Reflections"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+    <div className="flex flex-col h-full bg-[var(--gv-surface-base)] relative select-auto overflow-hidden">
+      {/* 1. Restrained Session Header */}
+      <ReflectHeader
+        session={session}
+        isCompleted={isCompleted}
+        isEditingTitle={isEditingTitle}
+        editTitleValue={editTitleValue}
+        onBack={onBack}
+        onStartEditTitle={() => setIsEditingTitle(true)}
+        onSaveTitle={handleSaveTitle}
+        onCancelEditTitle={() => setIsEditingTitle(false)}
+        onTitleChange={setEditTitleValue}
+        onOpenConcludeModal={() => setShowConcludeModal(true)}
+      />
 
-          {isEditingTitle ? (
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={editTitleValue}
-                onChange={(e) => setEditTitleValue(e.target.value)}
-                className="px-2.5 py-1 rounded-lg bg-stone-900 border border-amber-500/50 text-stone-100 text-sm focus:outline-none font-medium"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveTitle();
-                  if (e.key === 'Escape') setIsEditingTitle(false);
-                }}
-              />
-              <button
-                onClick={handleSaveTitle}
-                className="p-1 rounded bg-amber-500 text-stone-950 hover:bg-amber-400"
-                aria-label="Save title"
-              >
-                <Check className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setIsEditingTitle(false)}
-                className="p-1 rounded bg-stone-800 text-stone-400 hover:text-stone-200"
-                aria-label="Cancel"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2">
-              <h1 className="font-serif text-base sm:text-lg font-medium text-stone-100 max-w-md truncate">
-                {session?.title || 'Reflection Session'}
-              </h1>
-              {!isCompleted && (
-                <button
-                  onClick={() => setIsEditingTitle(true)}
-                  className="p-1 text-stone-500 hover:text-stone-300 transition cursor-pointer"
-                  aria-label="Edit title"
-                >
-                  <Edit2 className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center space-x-3">
-          {isCompleted ? (
-            <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 text-[11px] font-sans font-medium">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>Concluded</span>
-            </span>
-          ) : (
-            <div className="flex items-center space-x-2">
-              <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-sans font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                <span>Active</span>
-              </span>
-
-              <button
-                onClick={() => setShowConcludeModal(true)}
-                id="conclude-reflection-btn"
-                className="px-3 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-stone-100 text-xs font-sans font-medium border border-stone-800 transition cursor-pointer"
-              >
-                Conclude reflection
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* Conversation Area */}
+      {/* 2. Main Studio Canvas — Dynamic Editorial Reading Measure */}
       <div
-        className="flex-1 overflow-y-auto py-6 space-y-6 pr-1 font-sans cursor-text"
+        className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 cursor-text"
         onClick={handleSessionCanvasClick}
-        aria-label="Reflection conversation"
+        aria-label="Reflection conversation canvas"
       >
-        {messages.length === 0 ? (
-          <div className="py-16 text-center space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto">
-              <Sparkles className="w-5 h-5" />
+        <div className="gv-reading-measure">
+          {messages.length === 0 ? (
+            <div className="py-20 sm:py-24 text-center space-y-3 animate-turn-enter">
+              <div className="w-10 h-10 rounded-2xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center text-[var(--gv-accent-gold)] mx-auto mb-3">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h2 className="text-lg font-serif font-normal text-[var(--gv-text-primary)]">
+                The canvas is yours.
+              </h2>
+              <p className="text-xs sm:text-sm text-[var(--gv-text-secondary)] max-w-sm mx-auto leading-relaxed">
+                Express whatever thoughts are present. Gemini will listen attentively and provide reflective follow-up questions.
+              </p>
+              <p className="text-[11px] text-[var(--gv-text-tertiary)] pt-2">
+                Click anywhere in this space to start typing.
+              </p>
             </div>
-            <h2 className="text-base font-serif text-stone-200">The canvas is yours.</h2>
-            <p className="text-xs text-stone-500 max-w-sm mx-auto leading-relaxed">
-              Express whatever thoughts are present. Gemini will listen attentively and provide reflective follow-up questions.
-            </p>
-            <p className="text-[11px] text-stone-600 pt-1">
-              Click anywhere in this space to start typing.
-            </p>
-          </div>
-        ) : (
-          messages.map((msg, index) => {
-            const isUser = msg.role === 'user';
-            return (
-              <div
-                key={msg.id || index}
-                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-1.5`}
-              >
-                {/* Speaker Label */}
-                <div className="flex items-center space-x-1.5 text-[11px] text-stone-500 uppercase tracking-wider px-1">
-                  {isUser ? (
-                    <>
-                      <span>You</span>
-                      <User className="w-3 h-3 text-stone-400" />
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3 h-3 text-amber-400" />
-                      <span className="text-amber-400/90 font-medium">Gemini Vault</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Message Body */}
-                <div
-                  ref={(node) => {
+          ) : (
+            messages.map((msg, index) => {
+              const isLatest = index === messages.length - 1;
+              return (
+                <TurnItem
+                  key={msg.id || index}
+                  message={msg}
+                  isLatest={isLatest}
+                  registerRef={(node) => {
                     const id = msg.id;
                     if (!id) return;
                     if (node) assistantMessageRefs.current.set(id, node);
                     else assistantMessageRefs.current.delete(id);
                   }}
-                  className={`max-w-2xl p-4 sm:p-5 rounded-2xl leading-relaxed text-sm ${
-                    isUser
-                      ? 'bg-stone-800 text-stone-100 border border-stone-700/80 rounded-tr-sm shadow-sm'
-                      : 'bg-stone-950/80 text-stone-200 border border-stone-800 rounded-tl-sm shadow-md font-serif text-[15px]'
-                  }`}
-                >
-                  {isUser ? (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-                  ) : (
-                    <FormattedResponse content={msg.content} />
-                  )}
+                />
+              );
+            })
+          )}
+
+          {/* Active Generation Loading Indicator */}
+          {isSending && (
+            <div className="my-6 flex flex-col items-start space-y-2 animate-turn-enter">
+              <div className="flex items-center gap-1.5 text-xs text-[var(--gv-accent)] font-sans">
+                <Sparkles className="w-3.5 h-3.5 animate-spin text-[var(--gv-accent-gold)]" />
+                <span className="font-serif">Reflecting with Gemini...</span>
+              </div>
+              <div className="px-4 py-3 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] flex items-center gap-2 text-[var(--gv-text-tertiary)] text-xs">
+                <div className="w-2 h-2 rounded-full bg-[var(--gv-accent)] animate-bounce"></div>
+                <div className="w-2 h-2 rounded-full bg-[var(--gv-accent)] animate-bounce [animation-delay:0.2s]"></div>
+                <div className="w-2 h-2 rounded-full bg-[var(--gv-accent)] animate-bounce [animation-delay:0.4s]"></div>
+              </div>
+            </div>
+          )}
+
+          {/* Retryable Error Banner */}
+          {sendError && (
+            <div className="my-6 p-4 rounded-2xl bg-[var(--gv-error-muted)] border border-[var(--gv-error-border)] text-[var(--gv-error-text)] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-turn-enter">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-[var(--gv-error)] shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold block text-[var(--gv-error-text)]">Reflection Interrupted</span>
+                  <p className="mt-0.5 text-[11px] leading-relaxed opacity-90">{sendError.message}</p>
                 </div>
               </div>
-            );
-          })
-        )}
 
-        {/* Loading Indicator */}
-        {isSending && (
-          <div className="flex flex-col items-start space-y-1.5">
-            <div className="flex items-center space-x-1.5 text-[11px] text-amber-400 uppercase tracking-wider px-1">
-              <Sparkles className="w-3 h-3 animate-spin" />
-              <span>Reflecting with Gemini...</span>
+              {sendError.lastFailedText && (
+                <button
+                  type="button"
+                  onClick={() => sendMessage(sendError.lastFailedText, sendError.clientMsgId)}
+                  className="px-3 py-1.5 rounded-xl bg-[var(--gv-accent)] text-white text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto shrink-0 hover:opacity-90 transition cursor-pointer shadow-xs"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Retry Reflection</span>
+                </button>
+              )}
             </div>
-            <div className="p-4 rounded-2xl rounded-tl-sm bg-stone-950 border border-stone-800 flex items-center space-x-2 text-stone-400 text-xs">
-              <div className="w-2 h-2 rounded-full bg-amber-400 animate-bounce"></div>
-              <div className="w-2 h-2 rounded-full bg-amber-400 animate-bounce [animation-delay:0.2s]"></div>
-              <div className="w-2 h-2 rounded-full bg-amber-400 animate-bounce [animation-delay:0.4s]"></div>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* Retryable Error Banner */}
-        {sendError && (
-          <div className="p-4 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start space-x-2">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold block text-rose-200">Reflection Interrupted</span>
-                <p className="mt-0.5 text-[11px] text-rose-300/90">{sendError.message}</p>
-              </div>
-            </div>
-
-            {sendError.lastFailedText && (
-              <button
-                onClick={() => sendMessage(sendError.lastFailedText, sendError.clientMsgId)}
-                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold flex items-center space-x-1.5 self-start sm:self-auto shrink-0 transition cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retry Reflection</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} className="h-6" />
+        </div>
       </div>
 
-      {/* Immediate post-conclusion Vault Memory review */}
+      {/* 3. Floating Persistent Composer (Anchored at Bottom with Subtle Gradient Mask) */}
+      <footer className="relative shrink-0 z-20 px-4 sm:px-8 pb-4 sm:pb-6 pt-2 bg-gradient-to-t from-[var(--gv-surface-base)] via-[var(--gv-surface-base)]/95 to-transparent">
+        <div className="gv-reading-measure">
+          <ReflectComposer
+            inputText={inputText}
+            isSending={isSending}
+            isCompleted={isCompleted}
+            textareaRef={textareaRef}
+            onInputChange={setInputText}
+            onKeyDown={handleKeyDown}
+            onSend={() => sendMessage()}
+            onContinueSession={onContinueSession ? () => onContinueSession(sessionId) : undefined}
+          />
+        </div>
+      </footer>
+
+      {/* Immediate Post-Conclusion Vault Memory Review Modal */}
       {isReviewingMemories && session?.status === 'completed' && (
         <div
-          className="fixed inset-0 z-40 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Vault Memory review"
         >
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-stone-800 bg-stone-950 shadow-2xl">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[var(--gv-border-strong)] bg-[var(--gv-surface-base)] shadow-2xl">
             <MemoryReviewSection
               sessionId={sessionId}
               sessionTitle={session?.title || 'Reflection'}
@@ -639,99 +992,42 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
         </div>
       )}
 
-      {/* Composer or Concluded Footer */}
-      <footer className="pt-3 border-t border-stone-800 shrink-0">
-        {isCompleted ? (
-          <div className="p-4 rounded-xl bg-stone-950 border border-stone-800 text-center space-y-3">
-            <div className="space-y-1">
-              <div className="flex items-center justify-center space-x-2 text-xs font-medium text-emerald-400">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>This reflection is concluded and archived.</span>
-              </div>
-              <p className="text-[11px] text-stone-500 font-sans">
-                All messages remain preserved securely in your personal vault.
-              </p>
-            </div>
-            {onContinueSession && (
-              <div className="pt-1">
-                <button
-                  type="button"
-                  id="continue-reflection-btn"
-                  onClick={() => onContinueSession(sessionId)}
-                  className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold transition cursor-pointer shadow-sm"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Continue Reflection</span>
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="relative flex items-end rounded-xl bg-stone-950 border border-stone-800 focus-within:border-amber-500/50 focus-within:ring-1 focus-within:ring-amber-500/50 transition">
-              <textarea
-                ref={textareaRef}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Continue your reflection... (Enter to send, Shift+Enter for newline)"
-                rows={1}
-                disabled={isSending}
-                className="w-full p-3.5 pr-12 bg-transparent text-stone-100 placeholder-stone-500 text-sm focus:outline-none resize-none font-sans leading-relaxed max-h-[220px]"
-              />
-
-              <button
-                type="button"
-                onClick={() => sendMessage()}
-                disabled={!inputText.trim() || isSending}
-                id="send-message-btn"
-                className="absolute right-2 bottom-2 p-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 transition disabled:opacity-30 disabled:hover:bg-amber-500 cursor-pointer disabled:cursor-not-allowed"
-                aria-label="Send message"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between px-1 text-[11px] text-stone-500">
-              <span>Press <kbd className="px-1 py-0.5 rounded bg-stone-900 border border-stone-800 text-stone-400">Enter</kbd> to send, <kbd className="px-1 py-0.5 rounded bg-stone-900 border border-stone-800 text-stone-400">Shift+Enter</kbd> for newline</span>
-              <span className="hidden sm:inline">Protected by Gemini Vault isolation</span>
-            </div>
-          </div>
-        )}
-      </footer>
-
       {/* Conclude Session Confirmation Modal */}
       {showConcludeModal && (
-        <div className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+        <div className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[var(--gv-surface-base)] border border-[var(--gv-border-default)] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-fade-in">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center text-[var(--gv-accent-gold)]">
               <CheckCircle2 className="w-5 h-5" />
             </div>
 
             <div>
-              <h2 className="text-base font-serif font-medium text-stone-100">Conclude this reflection?</h2>
-              <p className="text-xs text-stone-400 mt-1 leading-relaxed">
-                Concluding marks the session as finished and preserves this conversation in your personal vault. You can review it at any time.
+              <h2 className="text-base font-serif font-medium text-[var(--gv-text-primary)]">
+                Conclude this reflection?
+              </h2>
+              <p className="text-xs text-[var(--gv-text-secondary)] mt-1.5 leading-relaxed font-sans">
+                Concluding marks the session as finished and preserves this conversation in your personal vault. You can review and continue it at any time.
               </p>
             </div>
 
-            <div className="flex items-center justify-end space-x-3 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
+                type="button"
                 onClick={() => setShowConcludeModal(false)}
                 disabled={isConcluding}
-                className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-medium transition cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] text-xs font-medium transition cursor-pointer"
               >
                 Keep Active
               </button>
               <button
+                type="button"
                 onClick={handleConcludeSession}
                 disabled={isConcluding}
                 id="confirm-conclude-btn"
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 rounded-xl bg-[var(--gv-accent)] hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 shadow-xs"
               >
                 {isConcluding ? (
                   <>
-                    <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     <span>Concluding...</span>
                   </>
                 ) : (

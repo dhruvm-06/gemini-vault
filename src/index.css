@@ -127,4 +127,28 @@
   .animate-fade-in {
     animation: gv-fade-in 0.35s var(--gv-ease-out);
   }
+
+  /* Cinematic turn entry animation for conversation canvas */
+  @keyframes gv-turn-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-turn-enter {
+    animation: gv-turn-enter 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Responsive fluid reading measure for Reflect studio */
+  .gv-reading-measure {
+    width: 100%;
+    max-width: min(100%, 48rem);
+    margin-left: auto;
+    margin-right: auto;
+  }
 }

@@ -29,6 +29,7 @@ export default function App() {
   const [initialPromptForSession, setInitialPromptForSession] = useState<string | undefined>();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
+  const [reflectContextItems, setReflectContextItems] = useState<ContextRailItem[]>([]);
   const [view, setView] = useState<AppView>(() => {
     const raw = new URLSearchParams(window.location.search).get('view');
     return parseViewFromParam(raw);
@@ -41,6 +42,7 @@ export default function App() {
       const viewParam = params.get('view');
       setActiveSessionId(sessionParam);
       setInitialPromptForSession(undefined);
+      setReflectContextItems([]);
       if (viewParam && (VALID_VIEWS as string[]).includes(viewParam)) {
         setView(viewParam as AppView);
       } else if (
@@ -61,6 +63,7 @@ export default function App() {
     setNavigationError(null);
     setActiveSessionId(null);
     setInitialPromptForSession(undefined);
+    setReflectContextItems([]);
     setView(nextView);
     const url = new URL(window.location.href);
     url.searchParams.delete('session');
@@ -83,6 +86,7 @@ export default function App() {
   };
 
   const handleBackFromSession = () => {
+    setReflectContextItems([]);
     if (
       window.history.state &&
       typeof (window.history.state as { returnView?: string }).returnView === 'string'
@@ -153,6 +157,9 @@ export default function App() {
   // Build contextual rail items based on current view and state
   const contextItems = useMemo<ContextRailItem[]>(() => {
     if (activeSessionId) {
+      if (reflectContextItems.length > 0) {
+        return reflectContextItems;
+      }
       return [
         {
           id: 'ctx-session-active',
@@ -304,6 +311,7 @@ export default function App() {
           onBack={handleBackFromSession}
           onContinueSession={continueSession}
           initialPrompt={initialPromptForSession}
+          onContextItemsChange={setReflectContextItems}
         />
       ) : view === 'vault' ? (
         <VaultDashboard onOpenSession={openSession} onContinueSession={continueSession} />

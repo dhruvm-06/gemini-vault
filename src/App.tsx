@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Shield } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Shield, Mic, FileText, Calendar, Compass, ArrowRight, Sparkles } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { JournalHome } from './components/JournalHome';
 import { JournalSessionView } from './components/JournalSessionView';
@@ -7,7 +7,17 @@ import { VaultDashboard } from './components/VaultDashboard';
 import { IntelligenceDashboard } from './components/IntelligenceDashboard';
 import { AppShell } from './components/AppShell';
 import { LandingPage } from './components/LandingPage';
-import { AppView } from './types';
+import { AppView, ContextRailItem } from './types';
+import { VaultPresence } from './components/VaultPresence';
+
+const VALID_VIEWS: AppView[] = ['home', 'voice', 'vault', 'intelligence', 'documents', 'calendar'];
+
+function parseViewFromParam(param: string | null): AppView {
+  if (param && (VALID_VIEWS as string[]).includes(param)) {
+    return param as AppView;
+  }
+  return 'home';
+}
 
 export default function App() {
   const auth = useAuth();
@@ -21,7 +31,7 @@ export default function App() {
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const [view, setView] = useState<AppView>(() => {
     const raw = new URLSearchParams(window.location.search).get('view');
-    return raw === 'vault' || raw === 'intelligence' ? raw : 'home';
+    return parseViewFromParam(raw);
   });
 
   useEffect(() => {
@@ -31,15 +41,14 @@ export default function App() {
       const viewParam = params.get('view');
       setActiveSessionId(sessionParam);
       setInitialPromptForSession(undefined);
-      if (viewParam === 'vault' || viewParam === 'intelligence' || viewParam === 'home') {
-        setView(viewParam);
-      } else if (event.state && typeof (event.state as { returnView?: string }).returnView === 'string') {
+      if (viewParam && (VALID_VIEWS as string[]).includes(viewParam)) {
+        setView(viewParam as AppView);
+      } else if (
+        event.state &&
+        typeof (event.state as { returnView?: string }).returnView === 'string'
+      ) {
         const returnView = (event.state as { returnView: AppView }).returnView;
-        if (returnView === 'vault' || returnView === 'intelligence' || returnView === 'home') {
-          setView(returnView);
-        } else {
-          setView('home');
-        }
+        setView(parseViewFromParam(returnView));
       } else if (!sessionParam) {
         setView('home');
       }
@@ -66,18 +75,23 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.set('session', sessionId);
     url.searchParams.delete('view');
-    window.history.pushState({ session: sessionId, returnView: view }, '', `${url.pathname}${url.search}${url.hash}`);
+    window.history.pushState(
+      { session: sessionId, returnView: view },
+      '',
+      `${url.pathname}${url.search}${url.hash}`
+    );
   };
 
   const handleBackFromSession = () => {
-    if (window.history.state && typeof (window.history.state as { returnView?: string }).returnView === 'string') {
+    if (
+      window.history.state &&
+      typeof (window.history.state as { returnView?: string }).returnView === 'string'
+    ) {
       const returnView = (window.history.state as { returnView: AppView }).returnView;
-      if (returnView === 'vault' || returnView === 'intelligence' || returnView === 'home') {
-        navigate(returnView);
-        return;
-      }
+      navigate(parseViewFromParam(returnView));
+      return;
     }
-    navigate(view === 'vault' || view === 'intelligence' ? view : 'home');
+    navigate(view === 'home' ? 'home' : view);
   };
 
   const startSession = async (initialText?: string) => {
@@ -100,9 +114,9 @@ export default function App() {
         ? initialText.trim()
         : 'Begin this reflection by asking me one thoughtful, open-ended question about what is currently occupying my mind. Keep it natural and concise.';
       openSession(newSessionId, starterPrompt);
-    } catch (error) {
-      console.error('[App] Failed to create reflection:', error);
-      setNavigationError(error instanceof Error ? error.message : 'Failed to create reflection.');
+    } catch (err) {
+      console.error('[App] Failed to create reflection:', err);
+      setNavigationError(err instanceof Error ? err.message : 'Failed to create reflection.');
     } finally {
       setIsCreatingSession(false);
     }
@@ -128,13 +142,125 @@ export default function App() {
         newSessionId,
         'I want to continue and rework the ideas from this earlier reflection. Help me revisit them thoughtfully and explore what has changed.'
       );
-    } catch (error) {
-      console.error('[App] Failed to continue reflection:', error);
-      setNavigationError(error instanceof Error ? error.message : 'Failed to continue reflection.');
+    } catch (err) {
+      console.error('[App] Failed to continue reflection:', err);
+      setNavigationError(err instanceof Error ? err.message : 'Failed to continue reflection.');
     } finally {
       setIsCreatingSession(false);
     }
   };
+
+  // Build contextual rail items based on current view and state
+  const contextItems = useMemo<ContextRailItem[]>(() => {
+    if (activeSessionId) {
+      return [
+        {
+          id: 'ctx-session-active',
+          kind: 'evidence',
+          title: 'Active Reflection Stream',
+          body: 'Your thoughts are being anchored securely in your personal vault. Take all the space you need.',
+        },
+      ];
+    }
+
+    switch (view) {
+      case 'home':
+        return [
+          {
+            id: 'prompt-1',
+            kind: 'prompt',
+            title: 'Morning Clarity',
+            body: 'What intention or challenge is calling for your attention most clearly today?',
+            actionLabel: 'Reflect on this',
+            onAction: () =>
+              void startSession('What intention or challenge is calling for my attention most clearly today?'),
+          },
+          {
+            id: 'prompt-2',
+            kind: 'prompt',
+            title: 'Unpacking an Open Loop',
+            body: 'Are there any lingering decisions, commitments, or tensions currently on your mind?',
+            actionLabel: 'Unpack loop',
+            onAction: () =>
+              void startSession('I want to unpack an open loop or pending decision that is currently on my mind.'),
+          },
+          {
+            id: 'prompt-3',
+            kind: 'prompt',
+            title: 'Notice Shift & Growth',
+            body: 'Look back across the past few days. What has begun to shift in your perspective?',
+            actionLabel: 'Explore shift',
+            onAction: () =>
+              void startSession('Reflecting on recent shifts: What feels different in my work and thinking right now?'),
+          },
+        ];
+
+      case 'vault':
+        return [
+          {
+            id: 'ctx-vault-1',
+            kind: 'memory',
+            title: 'Grounded Memory Structure',
+            body: 'Memories are categorized into goals, projects, preferences, and recurring themes. You maintain full ownership to edit or delete.',
+          },
+          {
+            id: 'ctx-vault-2',
+            kind: 'loop',
+            title: 'Open Loops Tracked',
+            body: 'Unresolved commitments and thoughts are automatically organized so nothing falls through the cracks.',
+          },
+        ];
+
+      case 'intelligence':
+        return [
+          {
+            id: 'ctx-intel-1',
+            kind: 'evidence',
+            title: 'Direct Vault Grounding',
+            body: 'Ask My Vault queries your reflection history and approved memories with strict semantic attribution and citation provenance.',
+          },
+          {
+            id: 'ctx-intel-2',
+            kind: 'commitment',
+            title: 'Evolution Over Time',
+            body: 'Signals continuously monitor recurring patterns, thematic drift, and progress toward declared intentions.',
+          },
+        ];
+
+      case 'voice':
+        return [
+          {
+            id: 'ctx-voice-1',
+            kind: 'citation',
+            title: 'Gemini Live Preview',
+            body: 'Voice mode streams bidirectional native audio with configurable Live API endpoints (gemini-3.1-flash-live-preview).',
+          },
+        ];
+
+      case 'documents':
+        return [
+          {
+            id: 'ctx-docs-1',
+            kind: 'citation',
+            title: 'Source Ingestion',
+            body: 'Uploaded files and reading notes will be chunked, embedded, and cited inside your reflections in Stage 8.',
+          },
+        ];
+
+      case 'calendar':
+        return [
+          {
+            id: 'ctx-cal-1',
+            kind: 'commitment',
+            title: 'Action Grounding',
+            body: 'Scheduled commitments and calendar integrations will be verified and server-mediated with human confirmation in Stage 9.',
+          },
+        ];
+
+      default:
+        return [];
+    }
+  }, [view, activeSessionId]);
 
   if (loading && !user) {
     return (
@@ -168,6 +294,8 @@ export default function App() {
       onSignOut={signOutUser}
       navigationError={navigationError}
       onDismissError={() => setNavigationError(null)}
+      contextItems={contextItems}
+      onOpenSession={openSession}
     >
       {activeSessionId ? (
         <JournalSessionView
@@ -181,6 +309,82 @@ export default function App() {
         <VaultDashboard onOpenSession={openSession} onContinueSession={continueSession} />
       ) : view === 'intelligence' ? (
         <IntelligenceDashboard onOpenSession={openSession} />
+      ) : view === 'voice' ? (
+        <div className="min-h-[calc(100vh-3rem)] flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
+          <div className="mb-6 flex items-center justify-center">
+            <VaultPresence size="medium" state="idle" label="Live Voice Core Idle" />
+          </div>
+          <span className="text-[11px] font-medium tracking-widest uppercase text-[var(--gv-accent-gold)] px-3 py-1 rounded-full bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/30">
+            Stage 7 Architecture
+          </span>
+          <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-4 font-medium">
+            Voice Reflection Studio
+          </h2>
+          <p className="mt-3 text-sm text-[var(--gv-text-secondary)] leading-relaxed">
+            Continuous, real-time spoken reflection powered by Gemini Live audio streaming with zero transcript lag.
+            Configured for <code className="text-xs px-1.5 py-0.5 rounded bg-[var(--gv-surface-raised)] font-mono text-[var(--gv-accent)]">gemini-3.1-flash-live-preview</code>.
+          </p>
+          <div className="mt-8 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('home')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-accent)] text-white text-xs font-medium hover:opacity-90 transition cursor-pointer shadow-xs"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>Begin Text Reflection</span>
+            </button>
+          </div>
+        </div>
+      ) : view === 'documents' ? (
+        <div className="min-h-[calc(100vh-3rem)] flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] flex items-center justify-center mb-5">
+            <FileText className="w-7 h-7" />
+          </div>
+          <span className="text-[11px] font-medium tracking-widest uppercase text-[var(--gv-accent-gold)] px-3 py-1 rounded-full bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/30">
+            Stage 8 Architecture
+          </span>
+          <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-4 font-medium">
+            Documents & Grounding
+          </h2>
+          <p className="mt-3 text-sm text-[var(--gv-text-secondary)] leading-relaxed">
+            Upload and ground your reflections in personal notes, PDFs, essays, and reading journals with strict semantic citations.
+          </p>
+          <div className="mt-8 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('vault')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-strong)] text-[var(--gv-text-primary)] text-xs font-medium hover:bg-[var(--gv-surface-raised)]/80 transition cursor-pointer"
+            >
+              <span>Explore Vault Memories</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : view === 'calendar' ? (
+        <div className="min-h-[calc(100vh-3rem)] flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] flex items-center justify-center mb-5">
+            <Calendar className="w-7 h-7" />
+          </div>
+          <span className="text-[11px] font-medium tracking-widest uppercase text-[var(--gv-accent-gold)] px-3 py-1 rounded-full bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/30">
+            Stage 9 Architecture
+          </span>
+          <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-4 font-medium">
+            Commitments & Calendar
+          </h2>
+          <p className="mt-3 text-sm text-[var(--gv-text-secondary)] leading-relaxed">
+            Bridge your reflective insights into scheduled intentions, focus blocks, and loop closures with verified human confirmation.
+          </p>
+          <div className="mt-8 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('intelligence')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-strong)] text-[var(--gv-text-primary)] text-xs font-medium hover:bg-[var(--gv-surface-raised)]/80 transition cursor-pointer"
+            >
+              <span>Open Intelligence & Loops</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       ) : (
         <JournalHome
           onStartNewSession={startSession}

@@ -106,4 +106,29 @@ export interface SaveMemoryRequest {
   confidence?: number;
 }
 
-export type AppView = 'home' | 'vault' | 'intelligence';
+export type AppView =
+  | 'home'
+  | 'voice'
+  | 'vault'
+  | 'intelligence'
+  | 'documents'
+  | 'calendar';
+
+export type ContextRailItemKind =
+  | 'memory'
+  | 'loop'
+  | 'commitment'
+  | 'prompt'
+  | 'evidence'
+  | 'citation';
+
+export interface ContextRailItem {
+  id: string;
+  kind: ContextRailItemKind;
+  title: string;
+  body: string;
+  timestamp?: string;
+  sourceSessionId?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}

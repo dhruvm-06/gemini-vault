@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Vault, Brain, User } from 'lucide-react';
+import { Compass, Mic, Bookmark, Brain, User } from 'lucide-react';
 import { AppView } from '../types';
 
 interface MobileNavProps {
@@ -27,18 +27,19 @@ export const MobileNav: React.FC<MobileNavProps> = ({
     label: string;
     icon: React.FC<{ className?: string }>;
   }[] = [
-    { key: 'home', label: 'Reflect', icon: Home },
-    { key: 'vault', label: 'Vault', icon: Vault },
-    { key: 'intelligence', label: 'Intelligence', icon: Brain },
+    { key: 'home', label: 'Reflect', icon: Compass },
+    { key: 'voice', label: 'Voice', icon: Mic },
+    { key: 'vault', label: 'Vault', icon: Bookmark },
+    { key: 'intelligence', label: 'Intel', icon: Brain },
   ];
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--gv-surface-ground)]/95 backdrop-blur-xl border-t border-[var(--gv-border-default)] transition-colors duration-150"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--gv-surface-nav)] text-[var(--gv-surface-nav-text)] backdrop-blur-xl border-t border-[var(--gv-border-default)] transition-colors duration-150"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Mobile Navigation"
     >
-      <div className="grid grid-cols-4 items-center">
+      <div className="grid grid-cols-5 items-center px-1">
         {navItems.map(({ key, label, icon: Icon }) => {
           const isActive = currentView === key && !isProfileOpen;
           return (
@@ -48,8 +49,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({
               onClick={() => onNavigate(key)}
               className={`min-h-[48px] h-14 w-full flex flex-col items-center justify-center gap-1 transition cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)] ${
                 isActive
-                  ? 'text-[var(--gv-accent)] font-semibold'
-                  : 'text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'
+                  ? 'text-[var(--gv-accent-gold)] font-semibold'
+                  : 'text-stone-400 hover:text-stone-200'
               }`}
               aria-current={isActive ? 'page' : undefined}
             >
@@ -67,8 +68,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({
           onClick={onOpenProfile}
           className={`min-h-[48px] h-14 w-full flex flex-col items-center justify-center gap-1 transition cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)] ${
             isProfileOpen
-              ? 'text-[var(--gv-accent)] font-semibold'
-              : 'text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'
+              ? 'text-[var(--gv-accent-gold)] font-semibold'
+              : 'text-stone-400 hover:text-stone-200'
           }`}
           aria-label="Open profile and appearance settings"
           aria-expanded={isProfileOpen}

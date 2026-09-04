@@ -81,6 +81,26 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
 export const useTheme = (): ThemeContextType => {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used within a ThemeProvider');
+  if (!ctx) {
+    const fallbackTheme: ResolvedTheme =
+      typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'night'
+        ? 'night'
+        : 'morning';
+    return {
+      preference: fallbackTheme,
+      theme: fallbackTheme,
+      setPreference: (next) => {
+        const r = resolve(next);
+        applyTheme(r);
+      },
+      toggle: () => {
+        if (typeof document !== 'undefined') {
+          const current = document.documentElement.getAttribute('data-theme') === 'night' ? 'night' : 'morning';
+          const next = current === 'night' ? 'morning' : 'night';
+          applyTheme(next);
+        }
+      },
+    };
+  }
   return ctx;
 };

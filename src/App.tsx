@@ -10,8 +10,7 @@ type AppView = 'home' | 'vault' | 'intelligence';
 
 export default function App() {
   const auth = useAuth();
-  const { user, loading, error, signInWithGoogle, getIdToken, clearError } = auth;
-  const signOut = (auth as { signOut?: () => Promise<void> }).signOut;
+  const { user, loading, error, signInWithGoogle, signOutUser, getIdToken, clearError } = auth;
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
     return new URLSearchParams(window.location.search).get('session');
@@ -25,11 +24,24 @@ export default function App() {
   });
 
   useEffect(() => {
-    const onPop = () => {
+    const onPop = (event: PopStateEvent) => {
       const params = new URLSearchParams(window.location.search);
-      setActiveSessionId(params.get('session'));
+      const sessionParam = params.get('session');
+      const viewParam = params.get('view');
+      setActiveSessionId(sessionParam);
       setInitialPromptForSession(undefined);
-      if (!params.get('session')) setView('home');
+      if (viewParam === 'vault' || viewParam === 'intelligence' || viewParam === 'home') {
+        setView(viewParam);
+      } else if (event.state && typeof (event.state as { returnView?: string }).returnView === 'string') {
+        const returnView = (event.state as { returnView: AppView }).returnView;
+        if (returnView === 'vault' || returnView === 'intelligence' || returnView === 'home') {
+          setView(returnView);
+        } else {
+          setView('home');
+        }
+      } else if (!sessionParam) {
+        setView('home');
+      }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -53,7 +65,18 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.set('session', sessionId);
     url.searchParams.delete('view');
-    window.history.pushState({ session: sessionId }, '', `${url.pathname}${url.search}${url.hash}`);
+    window.history.pushState({ session: sessionId, returnView: view }, '', `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  const handleBackFromSession = () => {
+    if (window.history.state && typeof (window.history.state as { returnView?: string }).returnView === 'string') {
+      const returnView = (window.history.state as { returnView: AppView }).returnView;
+      if (returnView === 'vault' || returnView === 'intelligence' || returnView === 'home') {
+        navigate(returnView);
+        return;
+      }
+    }
+    navigate(view === 'vault' || view === 'intelligence' ? view : 'home');
   };
 
   const startSession = async (initialText?: string) => {
@@ -220,14 +243,16 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="hidden lg:flex items-center gap-2 text-[10px] text-stone-600"><Search className="w-3 h-3" /> Private workspace</div>
             <div className="w-7 h-7 rounded-full bg-rose-500/80 text-white text-[10px] flex items-center justify-center">{(user.displayName || user.email || 'U').slice(0,1).toUpperCase()}</div>
-            {signOut && (
+            {signOutUser && (
               <button
                 type="button"
-                onClick={() => { void signOut(); }}
-                className="hidden sm:flex items-center gap-1.5 rounded-lg border border-stone-800 bg-stone-900 px-3 py-1.5 text-xs text-stone-400 hover:text-stone-100 hover:border-stone-700 transition"
+                id="header-signout-btn"
+                onClick={() => { void signOutUser(); }}
+                className="flex items-center gap-1.5 rounded-lg border border-stone-800 bg-stone-900 px-2.5 sm:px-3 py-1.5 text-xs text-stone-400 hover:text-stone-100 hover:border-stone-700 transition cursor-pointer"
+                aria-label="Sign out"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                Sign out
+                <span className="hidden sm:inline">Sign out</span>
               </button>
             )}
           </div>
@@ -249,8 +274,9 @@ export default function App() {
       <main className="min-h-[calc(100vh-4rem)]">
         {activeSessionId ? (
           <JournalSessionView
+            key={activeSessionId}
             sessionId={activeSessionId}
-            onBack={() => navigate('home')}
+            onBack={handleBackFromSession}
             onContinueSession={continueSession}
             initialPrompt={initialPromptForSession}
           />

@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { FormattedResponse } from './FormattedResponse';
 import { JournalSession, Memory } from '../types';
+import { toTimestamp } from '../utils/time';
 
 type SessionRecord = JournalSession & {
   updatedAt?: string | { seconds?: number; _seconds?: number };
@@ -27,16 +28,7 @@ type Signal = {
   actionLabel?: string;
 };
 
-const toTime = (value: unknown): number => {
-  if (!value) return 0;
-  if (typeof value === 'string') return Date.parse(value) || 0;
-  if (typeof value === 'object' && value !== null) {
-    const v = value as { seconds?: number; _seconds?: number };
-    const seconds = v.seconds ?? v._seconds;
-    return typeof seconds === 'number' ? seconds * 1000 : 0;
-  }
-  return 0;
-};
+const toTime = toTimestamp;
 
 const humanizeCategory = (value: string) =>
   value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

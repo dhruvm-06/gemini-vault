@@ -63,6 +63,7 @@ type MemoryScored = {
   createdAt: string | null;
   sourceSessionId: string | null;
   loopStatus?: string;
+  memoryStatus?: string;
   relevanceScore: number;
   relevanceReasons: string[];
   referenceCount: number;
@@ -140,6 +141,7 @@ const normalizeMemory = (doc: FirebaseFirestore.QueryDocumentSnapshot): MemorySc
     loopStatus: typeof data.loopStatus === 'string'
       ? data.loopStatus
       : ((data.category === 'goal' || data.category === 'commitment') ? 'open' : undefined),
+    memoryStatus: typeof data.memoryStatus === 'string' ? data.memoryStatus : 'active',
     relevanceScore: 0,
     relevanceReasons: [],
     referenceCount: typeof data.referenceCount === 'number' ? data.referenceCount : 0,
@@ -482,8 +484,17 @@ router.get('/signals', requireAuth, async (req: AuthenticatedRequest, res: Respo
       })
       .filter((memory) => memory.fact);
 
-    const completedSessions = sessionsSnap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
+    type SignalSessionCandidate = {
+      id: string;
+      status?: unknown;
+      title?: unknown;
+      createdAt?: unknown;
+      updatedAt?: unknown;
+      [key: string]: unknown;
+    };
+
+    const completedSessions: SignalSessionCandidate[] = sessionsSnap.docs
+      .map((doc): SignalSessionCandidate => ({ id: doc.id, ...(doc.data() || {}) }))
       .filter((session) => session.status === 'completed')
       .sort((a, b) => {
         const aTime = normalizeTimestamp(a.updatedAt || a.createdAt);
@@ -738,17 +749,7 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
       snapshots.forEach((snapshot) => {
         snapshot.forEach((doc) => {
           const data = doc.data();
-          let createdAt = data.createdAt;
-
-          if (createdAt && typeof createdAt.toDate === 'function') {
-            createdAt = createdAt.toDate().toISOString();
-          } else if (
-            createdAt &&
-            typeof createdAt === 'object' &&
-            typeof (createdAt as { _seconds?: number })._seconds === 'number'
-          ) {
-            createdAt = new Date((createdAt as { _seconds: number })._seconds * 1000).toISOString();
-          }
+          const createdAt = normalizeTimestamp(data.createdAt);
 
           memoryMap.set(doc.id, {
             ...data,
@@ -773,17 +774,7 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
 
     snap.forEach((doc) => {
       const data = doc.data();
-      let createdAt = data.createdAt;
-
-      if (createdAt && typeof createdAt.toDate === 'function') {
-        createdAt = createdAt.toDate().toISOString();
-      } else if (
-        createdAt &&
-        typeof createdAt === 'object' &&
-        typeof (createdAt as { _seconds?: number })._seconds === 'number'
-      ) {
-        createdAt = new Date((createdAt as { _seconds: number })._seconds * 1000).toISOString();
-      }
+      const createdAt = normalizeTimestamp(data.createdAt);
 
       memories.push({
         ...data,

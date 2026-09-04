@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { JournalSession, Memory } from '../types';
+import { toTimestamp } from '../utils/time';
 
 type SessionRecord = JournalSession & {
   rootSessionId?: string;
@@ -32,19 +33,10 @@ interface VaultDashboardProps {
   onContinueSession: (sessionId: string) => Promise<void>;
 }
 
-const toTime = (value: unknown): number => {
-  if (!value) return 0;
-  if (typeof value === 'string') return Date.parse(value) || 0;
-  if (typeof value === 'object' && value !== null) {
-    const v = value as { seconds?: number; _seconds?: number };
-    const seconds = v.seconds ?? v._seconds;
-    return typeof seconds === 'number' ? seconds * 1000 : 0;
-  }
-  return 0;
-};
+const toTime = toTimestamp;
 
 const categoryLabel = (category: string) =>
-  category.replace(/_/g, ' ').replace(/\w/g, (c) => c.toUpperCase());
+  category.replace(/_/g, ' ').replace(/ \w/g, (c) => c.toUpperCase());
 
 export const VaultDashboard: React.FC<VaultDashboardProps> = ({
   onOpenSession,
@@ -326,15 +318,27 @@ export const VaultDashboard: React.FC<VaultDashboardProps> = ({
                 </div>
                 <div className="mt-3 space-y-2">
                   {sessions.filter((s) => s.status === 'completed').slice(0, 5).map((session) => (
-                    <button
+                    <div
                       key={session.id}
-                      type="button"
-                      onClick={() => onOpenSession(session.id)}
-                      className="w-full text-left rounded-xl border border-stone-800 bg-stone-900/40 px-3 py-2.5 hover:border-stone-700"
+                      className="w-full rounded-xl border border-stone-800 bg-stone-900/40 px-3 py-2.5 hover:border-stone-700 flex items-center justify-between gap-2"
                     >
-                      <div className="text-xs text-stone-300 truncate">{session.title || 'Reflection'}</div>
-                      <div className="mt-1 text-[10px] text-stone-600">Open reflection</div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenSession(session.id)}
+                        className="text-left min-w-0 flex-1 cursor-pointer"
+                      >
+                        <div className="text-xs text-stone-300 truncate">{session.title || 'Reflection'}</div>
+                        <div className="mt-1 text-[10px] text-stone-600">Open reflection</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onContinueSession(session.id)}
+                        className="text-[10px] text-stone-500 hover:text-amber-300 shrink-0 px-2 py-1 rounded bg-stone-900 border border-stone-800 hover:border-amber-500/30 transition cursor-pointer"
+                        title="Continue this reflection"
+                      >
+                        Continue
+                      </button>
+                    </div>
                   ))}
                 </div>
               </section>

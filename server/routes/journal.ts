@@ -315,6 +315,7 @@ router.post('/session', requireAuth, async (req: AuthenticatedRequest, res: Resp
         status: 'active',
         wordCount: 0,
         continuedFromSessionId: continuedFromSessionId || null,
+        rootSessionId: sourceRootSessionId || null,
       },
     });
   } catch (error: unknown) {
@@ -441,6 +442,14 @@ router.patch('/session/:sessionId', requireAuth, async (req: AuthenticatedReques
 
     if (!sessionDoc.exists) {
       res.status(404).json({ error: 'Not Found', message: 'Session not found.' });
+      return;
+    }
+
+    if (sessionDoc.data()?.status === 'completed') {
+      res.status(400).json({
+        error: 'Session Concluded',
+        message: 'This reflection session has already been concluded and is read-only.',
+      });
       return;
     }
 

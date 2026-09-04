@@ -15,234 +15,20 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { JournalSession, JournalMessage } from '../types';
+import { FormattedResponse } from './FormattedResponse';
 import { MemoryReviewSection } from './MemoryReviewSection';
 
 interface JournalSessionViewProps {
   sessionId: string;
   onBack: () => void;
+  onContinueSession?: (sessionId: string) => Promise<void>;
   initialPrompt?: string;
 }
-
-type InlinePart =
-  | { type: 'text'; value: string }
-  | { type: 'bold'; value: string }
-  | { type: 'italic'; value: string }
-  | { type: 'code'; value: string };
-
-const parseInlineMarkdown = (text: string): InlinePart[] => {
-  const pattern = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*]+\*|_[^_]+_)/g;
-  const parts: InlinePart[] = [];
-  let lastIndex = 0;
-
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index ?? 0;
-
-    if (index > lastIndex) {
-      parts.push({ type: 'text', value: text.slice(lastIndex, index) });
-    }
-
-    const token = match[0];
-
-    if (token.startsWith('**') || token.startsWith('__')) {
-      parts.push({ type: 'bold', value: token.slice(2, -2) });
-    } else if (token.startsWith('`')) {
-      parts.push({ type: 'code', value: token.slice(1, -1) });
-    } else {
-      parts.push({ type: 'italic', value: token.slice(1, -1) });
-    }
-
-    lastIndex = index + token.length;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push({ type: 'text', value: text.slice(lastIndex) });
-  }
-
-  return parts;
-};
-
-const renderInlineMarkdown = (text: string, keyPrefix: string) => (
-  <>
-    {parseInlineMarkdown(text).map((part, index) => {
-      const key = `${keyPrefix}-${index}`;
-
-      switch (part.type) {
-        case 'bold':
-          return <strong key={key} className="font-semibold text-stone-100">{part.value}</strong>;
-        case 'italic':
-          return <em key={key}>{part.value}</em>;
-        case 'code':
-          return (
-            <code key={key} className="px-1.5 py-0.5 rounded bg-stone-900 border border-stone-700 text-amber-200 text-[0.9em] font-mono">
-              {part.value}
-            </code>
-          );
-        default:
-          return <React.Fragment key={key}>{part.value}</React.Fragment>;
-      }
-    })}
-  </>
-);
-
-const renderAssistantMarkdown = (content: string) => {
-  const lines = content.replace(/\r\n/g, '\n').split('\n');
-  const elements: React.ReactNode[] = [];
-  let paragraph: string[] = [];
-  let bulletItems: string[] = [];
-  let orderedItems: string[] = [];
-  let inCodeBlock = false;
-  let codeLines: string[] = [];
-  let blockIndex = 0;
-
-  const flushParagraph = () => {
-    if (paragraph.length === 0) return;
-    const value = paragraph.join(' ').trim();
-    if (value) {
-      elements.push(
-        <p key={`p-${blockIndex++}`} className="mb-3 last:mb-0 leading-relaxed">
-          {renderInlineMarkdown(value, `p-${blockIndex}`)}
-        </p>
-      );
-    }
-    paragraph = [];
-  };
-
-  const flushLists = () => {
-    if (bulletItems.length > 0) {
-      const items = bulletItems;
-      elements.push(
-        <ul key={`ul-${blockIndex++}`} className="list-disc pl-5 mb-3 space-y-1.5">
-          {items.map((item, index) => (
-            <li key={`ul-item-${blockIndex}-${index}`}>
-              {renderInlineMarkdown(item, `ul-${blockIndex}-${index}`)}
-            </li>
-          ))}
-        </ul>
-      );
-      bulletItems = [];
-    }
-
-    if (orderedItems.length > 0) {
-      const items = orderedItems;
-      elements.push(
-        <ol key={`ol-${blockIndex++}`} className="list-decimal pl-5 mb-3 space-y-1.5">
-          {items.map((item, index) => (
-            <li key={`ol-item-${blockIndex}-${index}`}>
-              {renderInlineMarkdown(item, `ol-${blockIndex}-${index}`)}
-            </li>
-          ))}
-        </ol>
-      );
-      orderedItems = [];
-    }
-  };
-
-  const flushBlocks = () => {
-    flushParagraph();
-    flushLists();
-  };
-
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-
-    if (/^```/.test(trimmed)) {
-      if (!inCodeBlock) {
-        flushBlocks();
-        inCodeBlock = true;
-        codeLines = [];
-      } else {
-        elements.push(
-          <pre key={`code-${blockIndex++}`} className="mb-3 overflow-x-auto rounded-xl bg-stone-950 border border-stone-800 p-4 text-xs leading-relaxed">
-            <code className="font-mono text-stone-300 whitespace-pre">{codeLines.join('\n')}</code>
-          </pre>
-        );
-        inCodeBlock = false;
-        codeLines = [];
-      }
-      return;
-    }
-
-    if (inCodeBlock) {
-      codeLines.push(line);
-      return;
-    }
-
-    if (!trimmed) {
-      flushBlocks();
-      return;
-    }
-
-    const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
-    if (headingMatch) {
-      flushBlocks();
-      const level = headingMatch[1].length;
-      const classes = {
-        1: 'text-xl font-semibold text-stone-100 mb-3',
-        2: 'text-lg font-semibold text-stone-100 mb-2.5',
-        3: 'text-base font-semibold text-stone-100 mb-2',
-        4: 'text-sm font-semibold text-stone-200 mb-2',
-      } as const;
-      const Tag = (`h${level}` as keyof JSX.IntrinsicElements);
-      elements.push(
-        React.createElement(
-          Tag,
-          { key: `h-${blockIndex++}`, className: classes[level as 1 | 2 | 3 | 4] },
-          renderInlineMarkdown(headingMatch[2], `h-${index}`)
-        )
-      );
-      return;
-    }
-
-    const quoteMatch = trimmed.match(/^>\s?(.*)$/);
-    if (quoteMatch) {
-      flushBlocks();
-      elements.push(
-        <blockquote key={`quote-${blockIndex++}`} className="border-l-2 border-amber-500/50 pl-4 mb-3 text-stone-400 italic">
-          {renderInlineMarkdown(quoteMatch[1], `q-${index}`)}
-        </blockquote>
-      );
-      return;
-    }
-
-    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
-    if (bulletMatch) {
-      flushParagraph();
-      if (orderedItems.length > 0) flushLists();
-      bulletItems.push(bulletMatch[1]);
-      return;
-    }
-
-    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)$/);
-    if (orderedMatch) {
-      flushParagraph();
-      if (bulletItems.length > 0) flushLists();
-      orderedItems.push(orderedMatch[1]);
-      return;
-    }
-
-    if (bulletItems.length > 0 || orderedItems.length > 0) {
-      flushLists();
-    }
-
-    paragraph.push(trimmed);
-  });
-
-  if (inCodeBlock) {
-    elements.push(
-      <pre key={`code-${blockIndex++}`} className="mb-3 overflow-x-auto rounded-xl bg-stone-950 border border-stone-800 p-4 text-xs leading-relaxed">
-        <code className="font-mono text-stone-300 whitespace-pre">{codeLines.join('\n')}</code>
-      </pre>
-    );
-  }
-
-  flushBlocks();
-
-  return <div>{elements}</div>;
-};
 
 export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   sessionId,
   onBack,
+  onContinueSession,
   initialPrompt,
 }) => {
   const { getIdToken } = useAuth();
@@ -397,6 +183,8 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   };
 
   useEffect(() => {
+    initialPromptSentRef.current = false;
+    loadedSessionRef.current = null;
     loadSession();
   }, [sessionId]);
 
@@ -783,7 +571,7 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
                   {isUser ? (
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                   ) : (
-                    renderAssistantMarkdown(msg.content)
+                    <FormattedResponse content={msg.content} />
                   )}
                 </div>
               </div>
@@ -854,14 +642,29 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
       {/* Composer or Concluded Footer */}
       <footer className="pt-3 border-t border-stone-800 shrink-0">
         {isCompleted ? (
-          <div className="p-4 rounded-xl bg-stone-950 border border-stone-800 text-center space-y-1.5">
-            <div className="flex items-center justify-center space-x-2 text-xs font-medium text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>This reflection is concluded and archived.</span>
+          <div className="p-4 rounded-xl bg-stone-950 border border-stone-800 text-center space-y-3">
+            <div className="space-y-1">
+              <div className="flex items-center justify-center space-x-2 text-xs font-medium text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>This reflection is concluded and archived.</span>
+              </div>
+              <p className="text-[11px] text-stone-500 font-sans">
+                All messages remain preserved securely in your personal vault.
+              </p>
             </div>
-            <p className="text-[11px] text-stone-500 font-sans">
-              All messages remain preserved securely in your personal vault.
-            </p>
+            {onContinueSession && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  id="continue-reflection-btn"
+                  onClick={() => onContinueSession(sessionId)}
+                  className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold transition cursor-pointer shadow-sm"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Continue Reflection</span>
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-2">

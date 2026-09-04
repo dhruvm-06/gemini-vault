@@ -14,10 +14,12 @@ import {
   Target,
   MessageCircle,
   ChevronDown,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { FormattedResponse } from './FormattedResponse';
 import { JournalSession, Memory } from '../types';
+import { toTimestamp } from '../utils/time';
 
 type SessionRecord = JournalSession & {
   rootSessionId?: string;
@@ -29,12 +31,14 @@ type SessionRecord = JournalSession & {
 interface JournalHomeProps {
   onStartNewSession: (initialText?: string) => Promise<void>;
   onResumeSession: (sessionId: string) => void;
+  onContinueSession?: (sessionId: string) => Promise<void>;
   isCreating: boolean;
 }
 
 export const JournalHome: React.FC<JournalHomeProps> = ({
   onStartNewSession,
   onResumeSession,
+  onContinueSession,
   isCreating,
 }) => {
   const { getIdToken, user } = useAuth();
@@ -117,9 +121,7 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
       const loadedMemories = Array.isArray(data.memories) ? data.memories : [];
 
       loadedMemories.sort((a: Memory, b: Memory) => {
-        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return bTime - aTime;
+        return toTimestamp(b.createdAt) - toTimestamp(a.createdAt);
       });
 
       setMemories(loadedMemories);
@@ -176,7 +178,6 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
 
       setAskAnswer(typeof data.answer === 'string' ? data.answer : 'Your Vault did not return an answer.');
       setAskQuestion('');
-      setAskQuestion('');
     } catch (err: unknown) {
       console.error('[JournalHome] Error asking Vault:', err);
       setAskError(err instanceof Error ? err.message : 'Unable to ask your Vault right now.');
@@ -190,20 +191,9 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
     await onStartNewSession(initialThought.trim());
   };
 
-  const toTime = (value: unknown): number => {
-    if (!value) return 0;
-    if (typeof value === 'string') return new Date(value).getTime() || 0;
-    if (typeof value === 'object' && value !== null) {
-      const candidate = value as { seconds?: number; _seconds?: number };
-      const seconds = candidate.seconds ?? candidate._seconds;
-      return typeof seconds === 'number' ? seconds * 1000 : 0;
-    }
-    return 0;
-  };
-
   const sortedSessions = [...sessions].sort(
-    (a, b) => toTime((b as SessionRecord).updatedAt || (b as SessionRecord).createdAt) -
-      toTime((a as SessionRecord).updatedAt || (a as SessionRecord).createdAt)
+    (a, b) => toTimestamp((b as SessionRecord).updatedAt || (b as SessionRecord).createdAt) -
+      toTimestamp((a as SessionRecord).updatedAt || (a as SessionRecord).createdAt)
   ) as SessionRecord[];
 
   const activeSessions = sortedSessions.filter((s) => s.status === 'active');
@@ -232,10 +222,10 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
       }).length,
       memoryPreview: memories
         .filter((memory) => threadSessions.some((session) => session.id === memory.sourceSessionId))
-        .sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt))
+        .sort((a, b) => toTimestamp(b.createdAt) - toTimestamp(a.createdAt))
         .slice(0, 2),
     }))
-    .sort((a, b) => toTime(b.latest.updatedAt || b.latest.createdAt) - toTime(a.latest.updatedAt || a.latest.createdAt));
+    .sort((a, b) => toTimestamp(b.latest.updatedAt || b.latest.createdAt) - toTimestamp(a.latest.updatedAt || a.latest.createdAt));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-12">
@@ -716,14 +706,28 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
                     </button>
 
                     <div className="flex flex-col items-end gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => onResumeSession(thread.latest.id)}
-                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:text-amber-300 hover:border-amber-500/40 text-xs font-medium transition cursor-pointer"
-                      >
-                        <span>Open</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onResumeSession(thread.latest.id)}
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:text-stone-100 hover:border-stone-600 text-xs font-medium transition cursor-pointer"
+                        >
+                          <span>Open</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+
+                        {onContinueSession && (
+                          <button
+                            type="button"
+                            id={`continue-thread-btn-${thread.latest.id}`}
+                            onClick={() => onContinueSession(thread.latest.id)}
+                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 text-xs font-medium transition cursor-pointer"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Continue</span>
+                          </button>
+                        )}
+                      </div>
 
                       {thread.latest.id && (
                         <span className="text-[10px] text-stone-600">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
   ArrowLeft,
   Send,
@@ -15,12 +15,230 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { JournalSession, JournalMessage } from '../types';
+import { MemoryReviewSection } from './MemoryReviewSection';
 
 interface JournalSessionViewProps {
   sessionId: string;
   onBack: () => void;
   initialPrompt?: string;
 }
+
+type InlinePart =
+  | { type: 'text'; value: string }
+  | { type: 'bold'; value: string }
+  | { type: 'italic'; value: string }
+  | { type: 'code'; value: string };
+
+const parseInlineMarkdown = (text: string): InlinePart[] => {
+  const pattern = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*]+\*|_[^_]+_)/g;
+  const parts: InlinePart[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+
+    if (index > lastIndex) {
+      parts.push({ type: 'text', value: text.slice(lastIndex, index) });
+    }
+
+    const token = match[0];
+
+    if (token.startsWith('**') || token.startsWith('__')) {
+      parts.push({ type: 'bold', value: token.slice(2, -2) });
+    } else if (token.startsWith('`')) {
+      parts.push({ type: 'code', value: token.slice(1, -1) });
+    } else {
+      parts.push({ type: 'italic', value: token.slice(1, -1) });
+    }
+
+    lastIndex = index + token.length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push({ type: 'text', value: text.slice(lastIndex) });
+  }
+
+  return parts;
+};
+
+const renderInlineMarkdown = (text: string, keyPrefix: string) => (
+  <>
+    {parseInlineMarkdown(text).map((part, index) => {
+      const key = `${keyPrefix}-${index}`;
+
+      switch (part.type) {
+        case 'bold':
+          return <strong key={key} className="font-semibold text-stone-100">{part.value}</strong>;
+        case 'italic':
+          return <em key={key}>{part.value}</em>;
+        case 'code':
+          return (
+            <code key={key} className="px-1.5 py-0.5 rounded bg-stone-900 border border-stone-700 text-amber-200 text-[0.9em] font-mono">
+              {part.value}
+            </code>
+          );
+        default:
+          return <React.Fragment key={key}>{part.value}</React.Fragment>;
+      }
+    })}
+  </>
+);
+
+const renderAssistantMarkdown = (content: string) => {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const elements: React.ReactNode[] = [];
+  let paragraph: string[] = [];
+  let bulletItems: string[] = [];
+  let orderedItems: string[] = [];
+  let inCodeBlock = false;
+  let codeLines: string[] = [];
+  let blockIndex = 0;
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return;
+    const value = paragraph.join(' ').trim();
+    if (value) {
+      elements.push(
+        <p key={`p-${blockIndex++}`} className="mb-3 last:mb-0 leading-relaxed">
+          {renderInlineMarkdown(value, `p-${blockIndex}`)}
+        </p>
+      );
+    }
+    paragraph = [];
+  };
+
+  const flushLists = () => {
+    if (bulletItems.length > 0) {
+      const items = bulletItems;
+      elements.push(
+        <ul key={`ul-${blockIndex++}`} className="list-disc pl-5 mb-3 space-y-1.5">
+          {items.map((item, index) => (
+            <li key={`ul-item-${blockIndex}-${index}`}>
+              {renderInlineMarkdown(item, `ul-${blockIndex}-${index}`)}
+            </li>
+          ))}
+        </ul>
+      );
+      bulletItems = [];
+    }
+
+    if (orderedItems.length > 0) {
+      const items = orderedItems;
+      elements.push(
+        <ol key={`ol-${blockIndex++}`} className="list-decimal pl-5 mb-3 space-y-1.5">
+          {items.map((item, index) => (
+            <li key={`ol-item-${blockIndex}-${index}`}>
+              {renderInlineMarkdown(item, `ol-${blockIndex}-${index}`)}
+            </li>
+          ))}
+        </ol>
+      );
+      orderedItems = [];
+    }
+  };
+
+  const flushBlocks = () => {
+    flushParagraph();
+    flushLists();
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+
+    if (/^```/.test(trimmed)) {
+      if (!inCodeBlock) {
+        flushBlocks();
+        inCodeBlock = true;
+        codeLines = [];
+      } else {
+        elements.push(
+          <pre key={`code-${blockIndex++}`} className="mb-3 overflow-x-auto rounded-xl bg-stone-950 border border-stone-800 p-4 text-xs leading-relaxed">
+            <code className="font-mono text-stone-300 whitespace-pre">{codeLines.join('\n')}</code>
+          </pre>
+        );
+        inCodeBlock = false;
+        codeLines = [];
+      }
+      return;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+
+    if (!trimmed) {
+      flushBlocks();
+      return;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
+    if (headingMatch) {
+      flushBlocks();
+      const level = headingMatch[1].length;
+      const classes = {
+        1: 'text-xl font-semibold text-stone-100 mb-3',
+        2: 'text-lg font-semibold text-stone-100 mb-2.5',
+        3: 'text-base font-semibold text-stone-100 mb-2',
+        4: 'text-sm font-semibold text-stone-200 mb-2',
+      } as const;
+      const Tag = (`h${level}` as keyof JSX.IntrinsicElements);
+      elements.push(
+        React.createElement(
+          Tag,
+          { key: `h-${blockIndex++}`, className: classes[level as 1 | 2 | 3 | 4] },
+          renderInlineMarkdown(headingMatch[2], `h-${index}`)
+        )
+      );
+      return;
+    }
+
+    const quoteMatch = trimmed.match(/^>\s?(.*)$/);
+    if (quoteMatch) {
+      flushBlocks();
+      elements.push(
+        <blockquote key={`quote-${blockIndex++}`} className="border-l-2 border-amber-500/50 pl-4 mb-3 text-stone-400 italic">
+          {renderInlineMarkdown(quoteMatch[1], `q-${index}`)}
+        </blockquote>
+      );
+      return;
+    }
+
+    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bulletMatch) {
+      flushParagraph();
+      if (orderedItems.length > 0) flushLists();
+      bulletItems.push(bulletMatch[1]);
+      return;
+    }
+
+    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    if (orderedMatch) {
+      flushParagraph();
+      if (bulletItems.length > 0) flushLists();
+      orderedItems.push(orderedMatch[1]);
+      return;
+    }
+
+    if (bulletItems.length > 0 || orderedItems.length > 0) {
+      flushLists();
+    }
+
+    paragraph.push(trimmed);
+  });
+
+  if (inCodeBlock) {
+    elements.push(
+      <pre key={`code-${blockIndex++}`} className="mb-3 overflow-x-auto rounded-xl bg-stone-950 border border-stone-800 p-4 text-xs leading-relaxed">
+        <code className="font-mono text-stone-300 whitespace-pre">{codeLines.join('\n')}</code>
+      </pre>
+    );
+  }
+
+  flushBlocks();
+
+  return <div>{elements}</div>;
+};
 
 export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   sessionId,
@@ -39,10 +257,14 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   const [editTitleValue, setEditTitleValue] = useState('');
   const [showConcludeModal, setShowConcludeModal] = useState(false);
   const [isConcluding, setIsConcluding] = useState(false);
-  const [showSavedConfirmation, setShowSavedConfirmation] = useState(false);
+  const [isReviewingMemories, setIsReviewingMemories] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const assistantMessageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [scrollTargetAssistantId, setScrollTargetAssistantId] = useState<string | null>(null);
+  const [scrollTargetUserId, setScrollTargetUserId] = useState<string | null>(null);
+  const focusAfterResponseRef = useRef(false);
   const initialPromptSentRef = useRef(false);
   const loadedSessionRef = useRef<string | null>(null);
 
@@ -57,6 +279,72 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 220)}px`;
     }
+  };
+
+  // Clicking the quiet canvas should behave like ChatGPT-style composer focus:
+  // typing can begin without requiring a click on the textarea itself.
+  // Chat-style "type anywhere" behavior.
+  // Use a document-level listener so it still works when the user clicks the
+  // canvas/body and the textarea is no longer the active element.
+  useEffect(() => {
+    const handleGlobalTyping = (event: KeyboardEvent) => {
+      if (
+        loadingSession ||
+        isSending ||
+        isReviewingMemories ||
+        session?.status === 'completed' ||
+        !textareaRef.current ||
+        event.isComposing
+      ) {
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key.length !== 1) return;
+
+      const target = event.target as HTMLElement | null;
+      const isFormControl =
+        target?.closest('input, textarea, select, button, a, [contenteditable="true"]');
+
+      // Never hijack typing that is intentionally happening in another control.
+      if (isFormControl) return;
+
+      event.preventDefault();
+
+      setInputText((previous) => previous + event.key);
+
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus({ preventScroll: true });
+      });
+    };
+
+    document.addEventListener('keydown', handleGlobalTyping);
+    return () => document.removeEventListener('keydown', handleGlobalTyping);
+  }, [loadingSession, isSending, isReviewingMemories, session?.status]);
+
+  const handleSessionCanvasClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      loadingSession ||
+      isSending ||
+      isReviewingMemories ||
+      session?.status === 'completed' ||
+      !textareaRef.current
+    ) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, a, input, textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+
+    // Do not steal focus while the user is selecting/copying conversation text.
+    const selectedText = typeof window !== 'undefined' ? window.getSelection()?.toString() : '';
+    if (selectedText) {
+      return;
+    }
+
+    textareaRef.current.focus({ preventScroll: true });
   };
 
   // Load session metadata and messages
@@ -116,9 +404,56 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
     adjustTextareaHeight();
   }, [inputText]);
 
+  // Initial load: place the user at the latest content once.
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isSending]);
+    if (!loadingSession && messages.length > 0) {
+      requestAnimationFrame(() => scrollToBottom('auto'));
+    }
+  }, [loadingSession, sessionId]);
+
+  // When a follow-up message is sent, immediately bring the start of that
+  // user turn into view while Gemini is generating the response.
+  // This mirrors the conversational viewport behavior users expect from ChatGPT.
+  useLayoutEffect(() => {
+    const userId = scrollTargetUserId;
+    if (!userId) return;
+
+    setScrollTargetUserId(null);
+
+    requestAnimationFrame(() => {
+      const target = assistantMessageRefs.current.get(userId);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }, [scrollTargetUserId]);
+
+  // After Gemini actually returns, bring that exact assistant response into view
+  // and return the cursor to the composer on desktop.
+  useLayoutEffect(() => {
+    const assistantId = scrollTargetAssistantId;
+    if (!assistantId) return;
+
+    setScrollTargetAssistantId(null);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const target = assistantMessageRefs.current.get(assistantId);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          scrollToBottom('smooth');
+        }
+
+        if (focusAfterResponseRef.current) {
+          focusAfterResponseRef.current = false;
+          if (typeof window !== 'undefined' && window.innerWidth >= 768 && !isReviewingMemories && session?.status !== 'completed') {
+            requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
+          }
+        }
+      });
+    });
+  }, [scrollTargetAssistantId, isReviewingMemories, session?.status]);
 
   // Send message to backend Gemini endpoint
   const sendMessage = async (contentToSend?: string, existingClientMsgId?: string) => {
@@ -142,6 +477,12 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
     };
 
     if (!existingClientMsgId) {
+      // For follow-up turns, scroll to the beginning of the new user message
+      // immediately, before Gemini starts generating.
+      if (messages.length > 0) {
+        setScrollTargetUserId(clientMsgId);
+      }
+
       setMessages((prev) => [...prev, optimisticUserMsg]);
       setInputText('');
       if (textareaRef.current) {
@@ -174,6 +515,8 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 
       // Append assistant message or update message list
       if (data.assistantMessage) {
+  setScrollTargetAssistantId(data.assistantMessage.id);
+  focusAfterResponseRef.current = true;
   setMessages((prev) => {
     const updated = [...prev];
 
@@ -275,11 +618,7 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
     );
 
     setShowConcludeModal(false);
-    setShowSavedConfirmation(true);
-
-    setTimeout(() => {
-      onBack();
-    }, 1400);
+    setIsReviewingMemories(true);
   } catch (err) {
     console.error('[JournalSessionView] Error concluding session:', err);
   } finally {
@@ -299,30 +638,10 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   const isCompleted = session?.status === 'completed';
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-4rem)]">
-    {showSavedConfirmation && (
-  <div className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div className="w-full max-w-sm rounded-2xl bg-stone-900 border border-emerald-500/20 shadow-2xl p-8 text-center space-y-4">
-      <div className="mx-auto w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-        <CheckCircle2 className="w-7 h-7 text-emerald-400" />
-      </div>
-
-      <div>
-        <h2 className="text-lg font-serif text-stone-100">
-          Reflection saved
-        </h2>
-        <p className="mt-1.5 text-xs text-stone-400 leading-relaxed">
-          Your conversation has been preserved in your personal Vault.
-        </p>
-      </div>
-
-      <div className="flex items-center justify-center space-x-2 text-[11px] text-emerald-400">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-        <span>Returning to your reflections...</span>
-      </div>
-    </div>
-  </div>
-)}
+    <div
+      className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-4rem)]"
+    >
+    
       {/* Session Header */}
       <header className="pb-4 border-b border-stone-800 flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-3">
@@ -406,7 +725,11 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
       </header>
 
       {/* Conversation Area */}
-      <div className="flex-1 overflow-y-auto py-6 space-y-6 pr-1 font-sans">
+      <div
+        className="flex-1 overflow-y-auto py-6 space-y-6 pr-1 font-sans cursor-text"
+        onClick={handleSessionCanvasClick}
+        aria-label="Reflection conversation"
+      >
         {messages.length === 0 ? (
           <div className="py-16 text-center space-y-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto">
@@ -415,6 +738,9 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
             <h2 className="text-base font-serif text-stone-200">The canvas is yours.</h2>
             <p className="text-xs text-stone-500 max-w-sm mx-auto leading-relaxed">
               Express whatever thoughts are present. Gemini will listen attentively and provide reflective follow-up questions.
+            </p>
+            <p className="text-[11px] text-stone-600 pt-1">
+              Click anywhere in this space to start typing.
             </p>
           </div>
         ) : (
@@ -442,13 +768,23 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 
                 {/* Message Body */}
                 <div
+                  ref={(node) => {
+                    const id = msg.id;
+                    if (!id) return;
+                    if (node) assistantMessageRefs.current.set(id, node);
+                    else assistantMessageRefs.current.delete(id);
+                  }}
                   className={`max-w-2xl p-4 sm:p-5 rounded-2xl leading-relaxed text-sm ${
                     isUser
                       ? 'bg-stone-800 text-stone-100 border border-stone-700/80 rounded-tr-sm shadow-sm'
                       : 'bg-stone-950/80 text-stone-200 border border-stone-800 rounded-tl-sm shadow-md font-serif text-[15px]'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {isUser ? (
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  ) : (
+                    renderAssistantMarkdown(msg.content)
+                  )}
                 </div>
               </div>
             );
@@ -495,6 +831,25 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Immediate post-conclusion Vault Memory review */}
+      {isReviewingMemories && session?.status === 'completed' && (
+        <div
+          className="fixed inset-0 z-40 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Vault Memory review"
+        >
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-stone-800 bg-stone-950 shadow-2xl">
+            <MemoryReviewSection
+              sessionId={sessionId}
+              sessionTitle={session?.title || 'Reflection'}
+              getIdToken={getIdToken}
+              onDone={onBack}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Composer or Concluded Footer */}
       <footer className="pt-3 border-t border-stone-800 shrink-0">

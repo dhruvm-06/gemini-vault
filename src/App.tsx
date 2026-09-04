@@ -1,285 +1,272 @@
 import React, { useEffect, useState } from 'react';
-import { Shield, Sparkles, Lock, Server, Fingerprint, AlertCircle, X } from 'lucide-react';
+import { Brain, Home, LogOut, Search, Shield, Sparkles, Vault } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
-import { Navigation } from './components/Navigation';
 import { JournalHome } from './components/JournalHome';
 import { JournalSessionView } from './components/JournalSessionView';
+import { VaultDashboard } from './components/VaultDashboard';
+import { IntelligenceDashboard } from './components/IntelligenceDashboard';
+
+type AppView = 'home' | 'vault' | 'intelligence';
 
 export default function App() {
-  const {
-    user,
-    loading,
-    error,
-    signInWithGoogle,
-    getIdToken,
-    clearError,
-  } = useAuth();
+  const auth = useAuth();
+  const { user, loading, error, signInWithGoogle, getIdToken, clearError } = auth;
+  const signOut = (auth as { signOut?: () => Promise<void> }).signOut;
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('session');
-});
+    return new URLSearchParams(window.location.search).get('session');
+  });
+  const [initialPromptForSession, setInitialPromptForSession] = useState<string | undefined>();
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [navigationError, setNavigationError] = useState<string | null>(null);
+  const [view, setView] = useState<AppView>(() => {
+    const raw = new URLSearchParams(window.location.search).get('view');
+    return raw === 'vault' || raw === 'intelligence' ? raw : 'home';
+  });
 
-const [initialPromptForSession, setInitialPromptForSession] =
-  useState<string | undefined>(undefined);
+  useEffect(() => {
+    const onPop = () => {
+      const params = new URLSearchParams(window.location.search);
+      setActiveSessionId(params.get('session'));
+      setInitialPromptForSession(undefined);
+      if (!params.get('session')) setView('home');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
-const [isCreatingSession, setIsCreatingSession] = useState(false);
-
-useEffect(() => {
-  const handlePopState = () => {
-    const params = new URLSearchParams(window.location.search);
-    setActiveSessionId(params.get('session'));
+  const navigate = (nextView: AppView) => {
+    setNavigationError(null);
+    setActiveSessionId(null);
     setInitialPromptForSession(undefined);
+    setView(nextView);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('session');
+    url.searchParams.set('view', nextView);
+    window.history.pushState({ view: nextView }, '', `${url.pathname}${url.search}${url.hash}`);
   };
 
-  window.addEventListener('popstate', handlePopState);
-
-  return () => {
-    window.removeEventListener('popstate', handlePopState);
+  const openSession = (sessionId: string, initialPrompt?: string) => {
+    setNavigationError(null);
+    setInitialPromptForSession(initialPrompt);
+    setActiveSessionId(sessionId);
+    const url = new URL(window.location.href);
+    url.searchParams.set('session', sessionId);
+    url.searchParams.delete('view');
+    window.history.pushState({ session: sessionId }, '', `${url.pathname}${url.search}${url.hash}`);
   };
-}, []);
 
-  // Start a new reflection session
-  const handleStartNewSession = async (initialText?: string) => {
+  const startSession = async (initialText?: string) => {
     setIsCreatingSession(true);
     try {
       const token = await getIdToken();
-      if (!token) return;
+      if (!token) throw new Error('Authentication required.');
 
       const res = await fetch('/api/journal/session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          draftContent: initialText || '',
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ draftContent: initialText || '' }),
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to create new reflection session.');
-      }
-
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Failed to create reflection.');
       const newSessionId = data.session?.id;
-      if (newSessionId) {
-  setInitialPromptForSession(initialText || undefined);
-  setActiveSessionId(newSessionId);
+      if (!newSessionId) throw new Error('Reflection session was not created.');
 
-  const url = new URL(window.location.href);
-  url.searchParams.set('session', newSessionId);
-  window.history.pushState({}, '', url);
-}
-    } catch (err) {
-      console.error('[App] Error creating new session:', err);
+      const starterPrompt = initialText?.trim()
+        ? initialText.trim()
+        : 'Begin this reflection by asking me one thoughtful, open-ended question about what is currently occupying my mind. Keep it natural and concise.';
+      openSession(newSessionId, starterPrompt);
+    } catch (error) {
+      console.error('[App] Failed to create reflection:', error);
+      setNavigationError(error instanceof Error ? error.message : 'Failed to create reflection.');
     } finally {
       setIsCreatingSession(false);
     }
   };
 
-  // Resume an existing reflection session
-  const handleResumeSession = (sessionId: string) => {
-  setInitialPromptForSession(undefined);
-  setActiveSessionId(sessionId);
+  const continueSession = async (sessionId: string) => {
+    setIsCreatingSession(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error('Authentication required.');
 
-  const url = new URL(window.location.href);
-  url.searchParams.set('session', sessionId);
-  window.history.pushState({}, '', url);
-};
+      const res = await fetch('/api/journal/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ continuedFromSessionId: sessionId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Failed to continue reflection.');
+      const newSessionId = data.session?.id;
+      if (!newSessionId) throw new Error('Continuation session was not created.');
 
-  // Return to the reflection home list
-  const handleBackToHome = () => {
-  setActiveSessionId(null);
-  setInitialPromptForSession(undefined);
+      openSession(
+        newSessionId,
+        'I want to continue and rework the ideas from this earlier reflection. Help me revisit them thoughtfully and explore what has changed.'
+      );
+    } catch (error) {
+      console.error('[App] Failed to continue reflection:', error);
+      setNavigationError(error instanceof Error ? error.message : 'Failed to continue reflection.');
+    } finally {
+      setIsCreatingSession(false);
+    }
+  };
 
-  const url = new URL(window.location.href);
-  url.searchParams.delete('session');
-  window.history.pushState({}, '', url);
-};
-
-  // Loading State
   if (loading && !user) {
     return (
-      <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col items-center justify-center p-6 selection:bg-amber-500 selection:text-stone-950 font-sans">
-        <div className="flex flex-col items-center space-y-4 text-center max-w-sm">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Shield className="w-6 h-6 animate-pulse" />
-          </div>
-          <div>
-            <h2 className="text-base font-serif font-medium text-stone-100">Opening Gemini Vault</h2>
-            <p className="text-xs text-stone-400 mt-1">Authenticating encrypted session...</p>
-          </div>
-          <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center">
+        <div className="text-center">
+          <Shield className="w-7 h-7 text-amber-400 mx-auto animate-pulse" />
+          <h2 className="mt-4 text-lg font-serif">Opening Gemini Vault</h2>
+          <p className="mt-1 text-xs text-stone-500">Authenticating your private space…</p>
         </div>
       </div>
     );
   }
 
-  // Unauthenticated State (Landing & Sign-In Page)
   if (!user) {
     return (
-      <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col justify-between selection:bg-amber-500 selection:text-stone-950 font-sans">
-        {/* Header */}
-        <header className="border-b border-stone-800 bg-stone-950/80 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+      <div className="min-h-screen bg-stone-900 text-stone-100 font-sans">
+        <header className="h-16 border-b border-stone-800 bg-stone-950/90 backdrop-blur-xl sticky top-0 z-50">
+          <div className="max-w-6xl mx-auto h-full px-5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
                 <Shield className="w-4 h-4" />
               </div>
-              <span className="font-serif font-medium tracking-tight text-stone-100 text-lg">Gemini Vault</span>
+              <span className="font-serif text-lg">Gemini Vault</span>
             </div>
-            <div className="text-xs font-serif text-stone-400">
-              Private Socratic AI Journal
-            </div>
+            <span className="hidden sm:inline text-xs text-stone-500">Private reflective intelligence</span>
           </div>
         </header>
 
-        {/* Hero Landing */}
-        <main className="max-w-4xl mx-auto px-6 py-16 flex-1 flex flex-col justify-center items-center text-center">
+        <main className="max-w-6xl mx-auto px-5 py-14 sm:py-20">
           {error && (
-            <div className="mb-8 w-full max-w-md p-4 rounded-xl bg-rose-950/50 border border-rose-800/80 text-rose-300 text-xs flex items-start justify-between text-left font-sans">
-              <div className="flex items-start space-x-2.5">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold block text-rose-200">Authentication Notice</span>
-                  <p className="mt-0.5">{error}</p>
-                </div>
+            <div className="max-w-2xl mx-auto mb-6 rounded-xl border border-rose-800/60 bg-rose-950/40 px-4 py-3 text-xs text-rose-300">
+              <div className="flex items-start justify-between gap-3">
+                <span>{error}</span>
+                <button type="button" onClick={clearError}>×</button>
               </div>
-              <button
-                onClick={clearError}
-                className="text-rose-400 hover:text-rose-200 p-1 -mr-1 -mt-1 cursor-pointer"
-                aria-label="Dismiss notice"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
             </div>
           )}
-
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium mb-6">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Private Reflective Thought Environment</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-5xl font-serif font-normal tracking-tight text-stone-100 leading-tight max-w-2xl mb-6">
-            A reflective personal journal that helps you think clearly.
-          </h1>
-
-          <p className="text-sm sm:text-base text-stone-400 max-w-xl leading-relaxed mb-10 font-sans">
-            Engage in multi-turn Socratic dialogues, unpack nuanced thoughts, and reflect with a calm AI companion strictly isolated to your private account.
-          </p>
-
-          {/* Google Sign-In Button */}
-          <div className="flex flex-col items-center space-y-4 w-full max-w-sm">
-            <button
-              onClick={signInWithGoogle}
-              disabled={loading}
-              id="google-signin-btn"
-              className="w-full h-12 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold flex items-center justify-center space-x-3 transition-all duration-150 shadow-lg shadow-amber-500/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-sans text-sm"
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="currentColor"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-              <span>Continue with Google</span>
-            </button>
-            <p className="text-[11px] text-stone-500 font-sans">
-              Passwordless &bull; Encrypted in Transit &bull; Private Isolation
-            </p>
-          </div>
-
-          {/* Privacy & Architecture Feature Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-3xl mt-16 text-left font-sans">
-            <div className="p-5 rounded-xl bg-stone-950 border border-stone-800/80">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-3">
-                <Lock className="w-4 h-4" />
+          <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-12 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
+                <Sparkles className="w-3.5 h-3.5" />
+                A private place to think
               </div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-200 mb-1">Private Reflection</h3>
-              <p className="text-xs text-stone-400 leading-relaxed">
-                Your entries and conversations are strictly isolated to your authenticated account.
+              <h1 className="mt-7 text-5xl sm:text-7xl font-serif font-normal leading-[0.93] tracking-tight">
+                Think freely.<br /><span className="text-stone-500">Remember what matters.</span>
+              </h1>
+              <p className="mt-6 max-w-xl text-sm sm:text-base leading-7 text-stone-400">
+                Reflect with Gemini, keep the memories you choose, and return to ideas as they evolve.
               </p>
+              <button onClick={signInWithGoogle} disabled={loading} id="google-signin-btn" className="mt-8 h-12 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-sm font-semibold transition disabled:opacity-50">
+                Continue with Google
+              </button>
             </div>
-
-            <div className="p-5 rounded-xl bg-stone-950 border border-stone-800/80">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3">
-                <Server className="w-4 h-4" />
+            <div className="rounded-[2rem] border border-stone-800 bg-stone-950 p-5 sm:p-6 shadow-2xl">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-stone-600">Inside your Vault</div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {[
+                  ['Reflect', 'Multi-turn Gemini dialogue'],
+                  ['Remember', 'User-approved memory'],
+                  ['Revisit', 'Open loops & threads'],
+                  ['Notice', 'Signals and changes'],
+                ].map(([title, body]) => (
+                  <div key={title} className="rounded-xl border border-stone-800 bg-stone-900/50 p-4">
+                    <div className="text-sm font-medium text-stone-100">{title}</div>
+                    <div className="mt-1 text-xs leading-5 text-stone-500">{body}</div>
+                  </div>
+                ))}
               </div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-200 mb-1">Socratic Companion</h3>
-              <p className="text-xs text-stone-400 leading-relaxed">
-                Gemini listens attentively, asking insightful follow-up questions without unsolicited advice.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-xl bg-stone-950 border border-stone-800/80">
-              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-3">
-                <Fingerprint className="w-4 h-4" />
-              </div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-200 mb-1">Durable History</h3>
-              <p className="text-xs text-stone-400 leading-relaxed">
-                Pick up where you left off at any time. Sessions remain saved and searchable in your personal vault.
-              </p>
             </div>
           </div>
         </main>
-
-        {/* Footer */}
-        <footer className="border-t border-stone-800 py-6 bg-stone-950 font-sans">
-          <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
-            <div>&copy; 2026 Gemini Vault &mdash; Google Cloud Gen AI APAC Cohort 3</div>
-            <div className="text-stone-500">
-              Private Thought Sanctuary
-            </div>
-          </div>
-        </footer>
       </div>
     );
   }
 
-  // Authenticated State (Multi-Turn Journaling Experience)
   return (
-    <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col justify-between selection:bg-amber-500 selection:text-stone-950">
-      <Navigation onGoHome={handleBackToHome} />
+    <div className="min-h-screen bg-stone-900 text-stone-100">
+      <header className="h-16 border-b border-stone-800 bg-stone-950/95 backdrop-blur-xl sticky top-0 z-50">
+        <div className="h-full px-4 sm:px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <button type="button" onClick={() => navigate('home')} className="flex items-center gap-2.5 shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center"><Shield className="w-4 h-4" /></div>
+              <span className="font-serif text-lg hidden sm:inline">Gemini Vault</span>
+            </button>
+            <nav className="hidden md:flex items-center gap-1 ml-3">
+              {([
+                ['home', Home, 'Reflect'],
+                ['vault', Vault, 'Vault'],
+                ['intelligence', Brain, 'Intelligence'],
+              ] as const).map(([key, Icon, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => navigate(key)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition ${
+                    !activeSessionId && view === key
+                      ? 'bg-stone-800 text-stone-100'
+                      : 'text-stone-500 hover:text-stone-200 hover:bg-stone-900'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-2 text-[10px] text-stone-600"><Search className="w-3 h-3" /> Private workspace</div>
+            <div className="w-7 h-7 rounded-full bg-rose-500/80 text-white text-[10px] flex items-center justify-center">{(user.displayName || user.email || 'U').slice(0,1).toUpperCase()}</div>
+            {signOut && (
+              <button
+                type="button"
+                onClick={() => { void signOut(); }}
+                className="hidden sm:flex items-center gap-1.5 rounded-lg border border-stone-800 bg-stone-900 px-3 py-1.5 text-xs text-stone-400 hover:text-stone-100 hover:border-stone-700 transition"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sign out
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
 
-      <main className="flex-1 w-full">
+      {navigationError && (
+        <div className="fixed top-[4.5rem] right-4 z-[100] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-rose-800/70 bg-rose-950/90 px-4 py-3 text-xs text-rose-200 shadow-2xl backdrop-blur-md">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="font-semibold">Something went wrong</div>
+              <div className="mt-1 text-rose-300/90">{navigationError}</div>
+            </div>
+            <button type="button" onClick={() => setNavigationError(null)} className="text-rose-400 hover:text-rose-100" aria-label="Dismiss error">×</button>
+          </div>
+        </div>
+      )}
+
+      <main className="min-h-[calc(100vh-4rem)]">
         {activeSessionId ? (
           <JournalSessionView
             sessionId={activeSessionId}
-            onBack={handleBackToHome}
+            onBack={() => navigate('home')}
+            onContinueSession={continueSession}
             initialPrompt={initialPromptForSession}
           />
+        ) : view === 'vault' ? (
+          <VaultDashboard onOpenSession={openSession} onContinueSession={continueSession} />
+        ) : view === 'intelligence' ? (
+          <IntelligenceDashboard onOpenSession={openSession} />
         ) : (
           <JournalHome
-            onStartNewSession={handleStartNewSession}
-            onResumeSession={handleResumeSession}
+            onStartNewSession={startSession}
+            onResumeSession={openSession}
+            onContinueSession={continueSession}
             isCreating={isCreatingSession}
           />
         )}
       </main>
-
-      {!activeSessionId && (
-        <footer className="border-t border-stone-800 py-6 bg-stone-950 font-sans">
-          <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
-            <div>&copy; 2026 Gemini Vault &mdash; Google Cloud Gen AI APAC Cohort 3</div>
-            <div className="text-stone-500 font-serif">
-              Your private space to think clearly
-            </div>
-          </div>
-        </footer>
-      )}
     </div>
   );
 }

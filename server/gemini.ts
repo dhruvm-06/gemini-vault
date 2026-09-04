@@ -1,35 +1,48 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 /**
- * Lazy-initialized GoogleGenAI client singleton.
+ * Lazy-initialized GoogleGenAI client configured for Vertex AI with Google Cloud ADC.
  * Uses User-Agent: 'aistudio-build' as required by platform standards.
  */
 let aiClient: GoogleGenAI | null = null;
 
-let client: GoogleGenAI | null = null;
-
 export function getGeminiClient(): GoogleGenAI {
-  if (!client) {
-    client = new GoogleGenAI({
+  if (!aiClient) {
+    const project =
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      process.env.PROJECT_ID ||
+      'gemini-vault-507219';
+
+    const location =
+      process.env.GOOGLE_CLOUD_LOCATION || 'global';
+
+    aiClient = new GoogleGenAI({
       vertexai: true,
-      project: process.env.PROJECT_ID || 'gemini-vault-507219',
-      location: 'global',
+      project,
+      location,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
     });
+
+    console.log(
+      `[Gemini] Initialized Vertex AI client for project '${project}' in location '${location}' via Google Cloud ADC`
+    );
   }
 
-  return client;
+  return aiClient;
 }
 
 /**
- * Model Fallback Ladder:
- * Ordered sequentially for low-latency conversational text interaction and high availability.
+ * Model Fallback Ladder for normal journaling:
+ * Uses Gemini 3.1 Flash-Lite as primary for conversational text interaction.
  */
-const MODEL_FALLBACK_LADDER = [
+export const MODEL_FALLBACK_LADDER = [
   'gemini-3.1-flash-lite',
-  'gemini-3.6-flash',
-  'gemini-3.5-flash-lite',
-  'gemini-3.5-flash',
-];
+  'gemini-2.5-flash',
+] as const;
 
 export const JOURNAL_SYSTEM_INSTRUCTION = `You are the reflective companion within Gemini Vault, a private, serene space for deep thinking and self-reflection.
 
@@ -41,9 +54,31 @@ Your Role & Guiding Principles:
 5. Non-Clinical Boundary: You are a reflective thought partner, not a therapist, counselor, or medical professional. Avoid clinical diagnoses, pathology labels, or therapeutic prescriptions.
 6. Tone & Style: Calm, warm, concise, and intellectually lucid. Avoid clichés like "How does that make you feel?" or generic motivational cheerleading. Speak in natural conversational prose (typically 2-4 focused paragraphs). Never give unsolicited multi-step action plans unless explicitly requested.`;
 
+export const MEMORY_EXTRACTION_SYSTEM_INSTRUCTION = `You are the memory extraction engine of Gemini Vault.
+Analyze the completed reflection conversation and suggest up to 3 durable memories that may matter in future reflections.
+
+Strict Memory Extraction Rules:
+1. Maximum 3 candidates. Return an empty array [] if there are no durable facts.
+2. Only extract information directly supported by the conversation. Never invent, extrapolate, or assume personal facts.
+3. Durable memories only: long-term goals, active projects, enduring personal preferences, important stable background context, recurring themes, or explicit commitments.
+4. Temporary states (such as being tired, hungry, feeling unwell today, transient weather, passing mood) should NOT become memories.
+5. NO clinical diagnoses, mental-health classifications, or psychological labels.
+6. NO speculation.
+7. NO secrets, passwords, tokens, or authentication credentials.
+8. Write memories naturally for the person who will see them later. Never refer to the person as "the user", "the reflector", or "the individual".
+9. Prefer concise, human-centered statements such as "Building Gemini Vault as a primary project this month", "You want to complete the deployment", or "You prefer concise, thoughtful responses". Use "you" when a full sentence is clearer; use a concise phrase when that reads more naturally.
+10. Preserve the person's actual intent and wording where possible. Do not turn a specific statement into a broader personality claim.
+11. Allowed categories: "goal", "project", "preference", "important_context", "recurring_theme", "commitment".`;
+
 export interface ConversationTurn {
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface ExtractedCandidateRaw {
+  fact: string;
+  category: 'goal' | 'project' | 'preference' | 'important_context' | 'recurring_theme' | 'commitment';
+  confidence: number;
 }
 
 /**
@@ -99,4 +134,98 @@ export async function generateJournalResponseWithFallback(
   }
 
   throw lastError || new Error('All Gemini fallback models failed to generate a response.');
+}
+
+/**
+ * Stage 4.1: Vault Memory Extraction
+ * Analyzes a completed reflection conversation and suggests up to 3 durable memories.
+ * Suggestions only — user reviews, edits, or dismisses each candidate.
+ */
+export async function extractMemoriesWithFallback(
+  conversationTurns: ConversationTurn[]
+): Promise<ExtractedCandidateRaw[]> {
+  const ai = getGeminiClient();
+
+  // Format bounded conversation turns into an explicit transcript
+  const transcript = conversationTurns
+    .map((turn) => `${turn.role === 'assistant' ? 'Companion (Gemini)' : 'Reflector (User)'}: ${turn.content}`)
+    .join('\n\n');
+
+  const prompt = `Here is the completed reflection session transcript:\n\n---\n${transcript}\n---\n\nAnalyze this conversation according to your strict memory extraction rules and return up to 3 durable memory candidates in valid JSON format.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: prompt,
+      config: {
+        systemInstruction: MEMORY_EXTRACTION_SYSTEM_INSTRUCTION,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              fact: {
+                type: Type.STRING,
+                description: 'A concise, human-centered durable statement directly supported by the conversation. Never refer to the person as the user, reflector, or individual.',
+              },
+              category: {
+                type: Type.STRING,
+                description: 'The category: goal, project, preference, important_context, recurring_theme, or commitment.',
+              },
+              confidence: {
+                type: Type.NUMBER,
+                description: 'A confidence score between 0.50 and 1.00 indicating factual support in the text.',
+              },
+            },
+            required: ['fact', 'category', 'confidence'],
+          },
+        },
+        temperature: 0.2,
+      },
+    });
+
+    const responseText = response.text?.trim();
+    if (!responseText) {
+      return [];
+    }
+
+    const parsed = JSON.parse(responseText);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    const validCategories = new Set([
+      'goal',
+      'project',
+      'preference',
+      'important_context',
+      'recurring_theme',
+      'commitment',
+    ]);
+
+    const candidates: ExtractedCandidateRaw[] = [];
+
+    for (const item of parsed) {
+      if (
+        item &&
+        typeof item.fact === 'string' &&
+        item.fact.trim().length > 0 &&
+        typeof item.category === 'string' &&
+        validCategories.has(item.category.trim())
+      ) {
+        const conf = typeof item.confidence === 'number' ? Math.max(0, Math.min(1, item.confidence)) : 0.85;
+        candidates.push({
+          fact: item.fact.trim(),
+          category: item.category.trim() as ExtractedCandidateRaw['category'],
+          confidence: Math.round(conf * 100) / 100,
+        });
+      }
+    }
+
+    return candidates.slice(0, 3);
+  } catch (err: unknown) {
+    console.warn('[Gemini] Memory extraction error:', err);
+    return [];
+  }
 }

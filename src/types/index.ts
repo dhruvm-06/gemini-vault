@@ -55,3 +55,53 @@ export interface JournalChatResponse {
   userMessage: JournalMessage;
   assistantMessage: JournalMessage;
 }
+
+export type MemoryCategory =
+  | 'goal'
+  | 'project'
+  | 'preference'
+  | 'important_context'
+  | 'recurring_theme'
+  | 'commitment';
+
+export interface Memory {
+  id: string;
+  userId: string;
+  fact: string;
+  category: MemoryCategory;
+  userNotes?: string;
+  confidence: number;
+  sourceSessionId: string;
+  extractedBy: string;
+  createdAt: unknown;
+  isActive: boolean;
+}
+
+export interface MemoryCandidate {
+  id: string;
+  fact: string;
+  category: MemoryCategory;
+  userNotes?: string;
+  confidence: number;
+  sourceSessionId: string;
+  isSaved?: boolean;
+}
+
+export interface ExtractMemoriesRequest {
+  sessionId: string;
+}
+
+export interface ExtractMemoriesResponse {
+  success: boolean;
+  sessionId: string;
+  candidates: MemoryCandidate[];
+  warning?: string;
+}
+
+export interface SaveMemoryRequest {
+  sessionId: string;
+  fact: string;
+  category: MemoryCategory;
+  userNotes?: string;
+  confidence?: number;
+}

@@ -18,122 +18,52 @@
    ============================================================================ */
 
 /* ---------------------------------------------------------------------------
-   Morning Vault (default light-first theme)
-   "Warm print editorial design meets an intelligent software studio."
+   Night Vault (default obsidian theme)
+   "Deep private thinking studio meets a warm, luminous personal sanctuary."
    --------------------------------------------------------------------------- */
 :root,
-[data-theme="morning"] {
-  color-scheme: light;
-
-  /* — Surfaces — */
-  --gv-surface-ground:       #faf8f5;   /* warm editorial ivory canvas     */
-  --gv-surface-base:         #ffffff;   /* crisp pure white reading sheet  */
-  --gv-surface-raised:       #f4f0e8;   /* warm stone tint for cards/pane  */
-  --gv-surface-rail:         #f8f5ee;   /* quiet contextual rail tint      */
-  --gv-surface-nav:          #141312;   /* near-black grounding rail       */
-  --gv-surface-nav-text:     #fafaf9;   /* contrast text on near-black     */
-  --gv-surface-overlay:      rgba(255, 255, 255, 0.94);
-
-  /* — Text — */
-  --gv-text-primary:         #1c1917;   /* deep charcoal stone (softer)    */
-  --gv-text-secondary:       #57534e;   /* mid stone 600 for UI controls   */
-  --gv-text-tertiary:        #8c857b;   /* muted warm stone for timestamps */
-  --gv-text-muted:           #a8a29e;   /* subtle hint stone 400           */
-  --gv-text-inverse:         #fafaf9;   /* stone-50                        */
-
-  /* — Borders — */
-  --gv-border-default:       #e7e2d8;   /* warm neutral border             */
-  --gv-border-subtle:        #f0ece3;   /* delicate separator              */
-  --gv-border-strong:        #c8c1b4;   /* defined active border           */
-
-  /* — Accent: Warm Amber & Burnished Gold — */
-  --gv-accent:               #b45309;   /* amber-700 (WCAG AA on light)    */
-  --gv-accent-hover:         #92400e;   /* amber-800                       */
-  --gv-accent-gold:          #c2883a;   /* burnished gold for presence     */
-  --gv-accent-muted:         rgba(180, 83, 9, 0.08);
-  --gv-accent-border:        rgba(180, 83, 9, 0.25);
-  --gv-accent-text:          #92400e;   /* amber-800                       */
-
-  /* — Semantic: Success — */
-  --gv-success:              #059669;   /* emerald-600                     */
-  --gv-success-muted:        rgba(5, 150, 105, 0.08);
-  --gv-success-border:       rgba(5, 150, 105, 0.25);
-
-  /* — Semantic: Error — */
-  --gv-error:                #e11d48;   /* rose-600                        */
-  --gv-error-muted:          rgba(225, 29, 72, 0.08);
-  --gv-error-border:         rgba(225, 29, 72, 0.25);
-  --gv-error-text:           #be123c;   /* rose-700                        */
-
-  /* — Elevation / Shadow (restrained, minimal) — */
-  --gv-shadow-sm:            0 1px 2px 0 rgba(28, 25, 23, 0.04);
-  --gv-shadow-md:            0 4px 6px -1px rgba(28, 25, 23, 0.06),
-                             0 2px 4px -2px rgba(28, 25, 23, 0.04);
-  --gv-shadow-lg:            0 10px 15px -3px rgba(28, 25, 23, 0.08),
-                             0 4px 6px -4px rgba(28, 25, 23, 0.04);
-  --gv-shadow-xl:            0 20px 25px -5px rgba(28, 25, 23, 0.08),
-                             0 8px 10px -6px rgba(28, 25, 23, 0.04);
-
-  /* — Focus ring — */
-  --gv-focus-ring:           rgba(180, 83, 9, 0.45);   /* amber-700/45    */
-  --gv-focus-ring-offset:    #faf8f5;
-
-  /* — Vault Presence — */
-  --gv-presence-core:        #c2883a;   /* burnished gold core             */
-  --gv-presence-ring:        #b45309;   /* warm amber orbital rings        */
-  --gv-presence-glow:        rgba(194, 136, 58, 0.16);
-  --gv-presence-pulse:       rgba(180, 83, 9, 0.08);
-
-  /* — Workspace Dimensions — */
-  --gv-sidebar-width:        230px;
-  --gv-rail-width:           320px;
-}
-
-/* ---------------------------------------------------------------------------
-   Night Vault (alternate dark theme)
-   --------------------------------------------------------------------------- */
 [data-theme="night"] {
   color-scheme: dark;
 
   /* — Surfaces — */
-  --gv-surface-ground:       #0c0a09;   /* stone-950 — deepest ground      */
-  --gv-surface-base:         #1c1917;   /* stone-900 — primary canvas      */
-  --gv-surface-raised:       #292524;   /* stone-800 — cards / raised pane  */
-  --gv-surface-rail:         #181615;   /* deep muted stone for rail       */
-  --gv-surface-nav:          #0c0a09;   /* obsidian navigation rail        */
-  --gv-surface-nav-text:     #fafaf9;   /* stone-50                        */
+  --gv-surface-ground:       #0c0a09;   /* stone-950 — deepest obsidian ground */
+  --gv-surface-base:         #1c1917;   /* stone-900 — primary obsidian canvas */
+  --gv-surface-raised:       #292524;   /* stone-800 — warm dark cards/panels  */
+  --gv-surface-rail:         #181615;   /* deep muted stone for rail           */
+  --gv-surface-nav:          #0c0a09;   /* obsidian navigation rail            */
+  --gv-surface-nav-text:     #fafaf9;   /* stone-50 contrast text              */
   --gv-surface-overlay:      rgba(28, 25, 23, 0.94);
 
   /* — Text — */
-  --gv-text-primary:         #fafaf9;   /* stone-50                        */
-  --gv-text-secondary:       #a8a29e;   /* stone-400                       */
-  --gv-text-tertiary:        #78716c;   /* stone-500                       */
-  --gv-text-muted:           #57534e;   /* stone-600                       */
-  --gv-text-inverse:         #0c0a09;   /* stone-950                       */
+  --gv-text-primary:         #fafaf9;   /* stone-50 warm light editorial text  */
+  --gv-text-secondary:       #a8a29e;   /* stone-400 UI controls & secondary   */
+  --gv-text-tertiary:        #78716c;   /* stone-500 muted timestamps          */
+  --gv-text-muted:           #57534e;   /* stone-600 subtle hints              */
+  --gv-text-inverse:         #0c0a09;   /* stone-950                           */
 
   /* — Borders — */
-  --gv-border-default:       #292524;   /* stone-800                       */
-  --gv-border-subtle:        #201d1b;   /* muted dark divider              */
-  --gv-border-strong:        #44403c;   /* stone-700                       */
+  --gv-border-default:       #292524;   /* stone-800 warm dark border          */
+  --gv-border-subtle:        #201d1b;   /* delicate dark divider               */
+  --gv-border-strong:        #44403c;   /* stone-700 defined active border     */
 
   /* — Accent: Luminous Amber & Soft Gold — */
-  --gv-accent:               #f59e0b;   /* amber-500                       */
-  --gv-accent-hover:         #fbbf24;   /* amber-400                       */
-  --gv-accent-gold:          #fbbf24;   /* luminous soft gold              */
+  --gv-accent:               #f59e0b;   /* amber-500                           */
+  --gv-accent-hover:         #fbbf24;   /* amber-400                           */
+  --gv-accent-gold:          #fbbf24;   /* luminous soft gold                  */
   --gv-accent-muted:         rgba(245, 158, 11, 0.12);
   --gv-accent-border:        rgba(245, 158, 11, 0.30);
-  --gv-accent-text:          #fcd34d;   /* amber-300                       */
+  --gv-accent-text:          #fcd34d;   /* amber-300                           */
 
   /* — Semantic: Success — */
-  --gv-success:              #34d399;   /* emerald-400                     */
+  --gv-success:              #34d399;   /* emerald-400                         */
   --gv-success-muted:        rgba(52, 211, 153, 0.10);
   --gv-success-border:       rgba(52, 211, 153, 0.30);
 
   /* — Semantic: Error — */
-  --gv-error:                #fb7185;   /* rose-400                        */
+  --gv-error:                #fb7185;   /* rose-400                            */
   --gv-error-muted:          rgba(251, 113, 133, 0.12);
   --gv-error-border:         rgba(159, 18, 57, 0.60);
-  --gv-error-text:           #fda4af;   /* rose-300                        */
+  --gv-error-text:           #fda4af;   /* rose-300                            */
 
   /* — Elevation / Shadow — */
   --gv-shadow-sm:            0 1px 2px 0 rgba(0, 0, 0, 0.40);
@@ -145,14 +75,85 @@
                              0 8px 10px -6px rgba(0, 0, 0, 0.50);
 
   /* — Focus ring — */
-  --gv-focus-ring:           rgba(245, 158, 11, 0.50);  /* amber-500/50    */
+  --gv-focus-ring:           rgba(245, 158, 11, 0.50);  /* amber-500/50       */
   --gv-focus-ring-offset:    #0c0a09;
 
   /* — Vault Presence — */
-  --gv-presence-core:        #fbbf24;   /* luminous gold core              */
-  --gv-presence-ring:        #f59e0b;   /* glowing amber orbital rings     */
+  --gv-presence-core:        #fbbf24;   /* luminous gold core                  */
+  --gv-presence-ring:        #f59e0b;   /* glowing amber orbital rings         */
   --gv-presence-glow:        rgba(245, 158, 11, 0.20);
   --gv-presence-pulse:       rgba(245, 158, 11, 0.08);
+
+  /* — Workspace Dimensions — */
+  --gv-sidebar-width:        230px;
+  --gv-rail-width:           320px;
+}
+
+/* ---------------------------------------------------------------------------
+   Morning Vault (alternate light theme)
+   "Warm print editorial design meets an intelligent software studio."
+   --------------------------------------------------------------------------- */
+[data-theme="morning"] {
+  color-scheme: light;
+
+  /* — Surfaces — */
+  --gv-surface-ground:       #faf8f5;   /* warm editorial ivory canvas         */
+  --gv-surface-base:         #ffffff;   /* crisp pure white reading sheet      */
+  --gv-surface-raised:       #f4f0e8;   /* warm stone tint for cards/pane      */
+  --gv-surface-rail:         #f8f5ee;   /* quiet contextual rail tint          */
+  --gv-surface-nav:          #141312;   /* near-black grounding rail           */
+  --gv-surface-nav-text:     #fafaf9;   /* contrast text on near-black         */
+  --gv-surface-overlay:      rgba(255, 255, 255, 0.94);
+
+  /* — Text — */
+  --gv-text-primary:         #1c1917;   /* deep charcoal stone (softer)        */
+  --gv-text-secondary:       #57534e;   /* mid stone 600 for UI controls       */
+  --gv-text-tertiary:        #8c857b;   /* muted warm stone for timestamps     */
+  --gv-text-muted:           #a8a29e;   /* subtle hint stone 400               */
+  --gv-text-inverse:         #fafaf9;   /* stone-50                            */
+
+  /* — Borders — */
+  --gv-border-default:       #e7e2d8;   /* warm neutral border                 */
+  --gv-border-subtle:        #f0ece3;   /* delicate separator                  */
+  --gv-border-strong:        #c8c1b4;   /* defined active border               */
+
+  /* — Accent: Warm Amber & Burnished Gold — */
+  --gv-accent:               #b45309;   /* amber-700 (WCAG AA on light)        */
+  --gv-accent-hover:         #92400e;   /* amber-800                           */
+  --gv-accent-gold:          #c2883a;   /* burnished gold for presence         */
+  --gv-accent-muted:         rgba(180, 83, 9, 0.08);
+  --gv-accent-border:        rgba(180, 83, 9, 0.25);
+  --gv-accent-text:          #92400e;   /* amber-800                           */
+
+  /* — Semantic: Success — */
+  --gv-success:              #059669;   /* emerald-600                         */
+  --gv-success-muted:        rgba(5, 150, 105, 0.08);
+  --gv-success-border:       rgba(5, 150, 105, 0.25);
+
+  /* — Semantic: Error — */
+  --gv-error:                #e11d48;   /* rose-600                            */
+  --gv-error-muted:          rgba(225, 29, 72, 0.08);
+  --gv-error-border:         rgba(225, 29, 72, 0.25);
+  --gv-error-text:           #be123c;   /* rose-700                            */
+
+  /* — Elevation / Shadow (restrained, minimal) — */
+  --gv-shadow-sm:            0 1px 2px 0 rgba(28, 25, 23, 0.04);
+  --gv-shadow-md:            0 4px 6px -1px rgba(28, 25, 23, 0.06),
+                             0 2px 4px -2px rgba(28, 25, 23, 0.04);
+  --gv-shadow-lg:            0 10px 15px -3px rgba(28, 25, 23, 0.08),
+                             0 4px 6px -4px rgba(28, 25, 23, 0.04);
+  --gv-shadow-xl:            0 20px 25px -5px rgba(28, 25, 23, 0.08),
+                             0 8px 10px -6px rgba(28, 25, 23, 0.04);
+
+  /* — Focus ring — */
+  --gv-focus-ring:           rgba(180, 83, 9, 0.45);   /* amber-700/45        */
+  --gv-focus-ring-offset:    #faf8f5;
+
+  /* — Vault Presence — */
+  --gv-presence-core:        #c2883a;   /* burnished gold core                 */
+  --gv-presence-ring:        #b45309;   /* warm amber orbital rings            */
+  --gv-presence-glow:        rgba(194, 136, 58, 0.16);
+  --gv-presence-pulse:       rgba(180, 83, 9, 0.08);
 
   /* — Workspace Dimensions — */
   --gv-sidebar-width:        230px;

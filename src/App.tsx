@@ -26,6 +26,9 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
     return new URLSearchParams(window.location.search).get('session');
   });
+  const [sessionInitialMode, setSessionInitialMode] = useState<'text' | 'voice'>(() => {
+    return new URLSearchParams(window.location.search).get('mode') === 'voice' ? 'voice' : 'text';
+  });
   const [initialPromptForSession, setInitialPromptForSession] = useState<string | undefined>();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
@@ -40,7 +43,9 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const sessionParam = params.get('session');
       const viewParam = params.get('view');
+      const modeParam = params.get('mode');
       setActiveSessionId(sessionParam);
+      setSessionInitialMode(modeParam === 'voice' ? 'voice' : 'text');
       setInitialPromptForSession(undefined);
       setReflectContextItems([]);
       if (viewParam && (VALID_VIEWS as string[]).includes(viewParam)) {
@@ -67,22 +72,66 @@ export default function App() {
     setView(nextView);
     const url = new URL(window.location.href);
     url.searchParams.delete('session');
+    url.searchParams.delete('mode');
     url.searchParams.set('view', nextView);
     window.history.pushState({ view: nextView }, '', `${url.pathname}${url.search}${url.hash}`);
   };
 
-  const openSession = (sessionId: string, initialPrompt?: string) => {
+  const openSession = (
+    sessionId: string,
+    initialPrompt?: string,
+    initialMode: 'text' | 'voice' = 'text'
+  ) => {
     setNavigationError(null);
     setInitialPromptForSession(initialPrompt);
+    setSessionInitialMode(initialMode);
     setActiveSessionId(sessionId);
     const url = new URL(window.location.href);
     url.searchParams.set('session', sessionId);
+    if (initialMode === 'voice') {
+      url.searchParams.set('mode', 'voice');
+    } else {
+      url.searchParams.delete('mode');
+    }
     url.searchParams.delete('view');
     window.history.pushState(
-      { session: sessionId, returnView: view },
+      { session: sessionId, returnView: view, mode: initialMode },
       '',
       `${url.pathname}${url.search}${url.hash}`
     );
+  };
+
+  const startVoiceSession = async () => {
+    setIsCreatingSession(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error('Authentication required.');
+
+      const now = new Date();
+      const title = `Voice Reflection: ${now.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })}`;
+
+      const res = await fetch('/api/journal/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title, draftContent: '' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Failed to create voice reflection.');
+      const newSessionId = data.session?.id;
+      if (!newSessionId) throw new Error('Reflection session was not created.');
+
+      openSession(newSessionId, undefined, 'voice');
+    } catch (err) {
+      console.error('[App] Failed to create voice reflection:', err);
+      setNavigationError(err instanceof Error ? err.message : 'Failed to create voice reflection.');
+    } finally {
+      setIsCreatingSession(false);
+    }
   };
 
   const handleBackFromSession = () => {
@@ -239,8 +288,8 @@ export default function App() {
           {
             id: 'ctx-voice-1',
             kind: 'citation',
-            title: 'Gemini Live Preview',
-            body: 'Voice mode streams bidirectional native audio with configurable Live API endpoints (gemini-3.1-flash-live-preview).',
+            title: 'Live Spoken Stream',
+            body: 'Continuous bidirectional native audio with sub-20ms barge-in interruption and unified session lineage.',
           },
         ];
 
@@ -249,8 +298,8 @@ export default function App() {
           {
             id: 'ctx-docs-1',
             kind: 'citation',
-            title: 'Source Ingestion',
-            body: 'Uploaded files and reading notes will be chunked, embedded, and cited inside your reflections in Stage 8.',
+            title: 'Source Grounding',
+            body: 'Upload personal notes, essays, and reading journals to ground reflections in your own sources.',
           },
         ];
 
@@ -259,8 +308,8 @@ export default function App() {
           {
             id: 'ctx-cal-1',
             kind: 'commitment',
-            title: 'Action Grounding',
-            body: 'Scheduled commitments and calendar integrations will be verified and server-mediated with human confirmation in Stage 9.',
+            title: 'Action Alignment',
+            body: 'Scheduled commitments and focus blocks verified and server-mediated with your explicit personal confirmation.',
           },
         ];
 
@@ -311,6 +360,7 @@ export default function App() {
           onBack={handleBackFromSession}
           onContinueSession={continueSession}
           initialPrompt={initialPromptForSession}
+          initialMode={sessionInitialMode}
           onContextItemsChange={setReflectContextItems}
         />
       ) : view === 'vault' ? (
@@ -318,28 +368,50 @@ export default function App() {
       ) : view === 'intelligence' ? (
         <IntelligenceDashboard onOpenSession={openSession} />
       ) : view === 'voice' ? (
-        <div className="min-h-[calc(100vh-3rem)] flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
-          <div className="mb-6 flex items-center justify-center">
-            <VaultPresence size="medium" state="idle" label="Live Voice Core Idle" />
+        <div className="min-h-[calc(100vh-3rem)] flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto animate-fade-in">
+          <button
+            type="button"
+            onClick={startVoiceSession}
+            disabled={isCreatingSession}
+            className="group relative flex flex-col items-center justify-center p-8 rounded-3xl bg-[var(--gv-surface-raised)]/50 border border-[var(--gv-border-default)] hover:border-[var(--gv-accent)]/60 transition duration-300 cursor-pointer shadow-sm hover:shadow-md disabled:opacity-50"
+            aria-label="Start Voice Reflection"
+            title="Start Voice Reflection"
+          >
+            <VaultPresence size="large" state="idle" label="Live Voice Core Ready" />
+            <div className="mt-5 flex items-center gap-2 text-xs font-medium text-[var(--gv-accent)] group-hover:underline">
+              <Mic className="w-3.5 h-3.5" />
+              <span>{isCreatingSession ? 'Opening Voice Reflection…' : 'Tap to Speak with Vault Presence'}</span>
+            </div>
+          </button>
+          <div className="mt-6 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] text-xs font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse" />
+            <span>Spoken Reflection Studio</span>
           </div>
-          <span className="text-[11px] font-medium tracking-widest uppercase text-[var(--gv-accent-gold)] px-3 py-1 rounded-full bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/30">
-            Stage 7 Architecture
-          </span>
-          <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-4 font-medium">
+          <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-3 font-medium">
             Voice Reflection Studio
           </h2>
-          <p className="mt-3 text-sm text-[var(--gv-text-secondary)] leading-relaxed">
-            Continuous, real-time spoken reflection powered by Gemini Live audio streaming with zero transcript lag.
-            Configured for <code className="text-xs px-1.5 py-0.5 rounded bg-[var(--gv-surface-raised)] font-mono text-[var(--gv-accent)]">gemini-3.1-flash-live-preview</code>.
+          <p className="mt-3 text-sm text-[var(--gv-text-secondary)] leading-relaxed max-w-md">
+            Continuous, real-time spoken reflection powered by low-latency audio streaming with zero transcript lag.
+            Speaks, listens, and understands naturally with instant interruption.
           </p>
           <div className="mt-8 flex items-center gap-3">
             <button
               type="button"
+              onClick={startVoiceSession}
+              disabled={isCreatingSession}
+              id="start-voice-studio-btn"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--gv-accent)] text-white text-xs font-medium hover:opacity-90 transition cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>{isCreatingSession ? 'Opening…' : 'Enter Voice Reflection'}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('home')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-accent)] text-white text-xs font-medium hover:opacity-90 transition cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-strong)] text-[var(--gv-text-primary)] text-xs font-medium hover:bg-[var(--gv-surface-raised)]/80 transition cursor-pointer"
             >
               <Compass className="w-3.5 h-3.5" />
-              <span>Begin Text Reflection</span>
+              <span>Reflect in Text</span>
             </button>
           </div>
         </div>
@@ -349,7 +421,7 @@ export default function App() {
             <FileText className="w-7 h-7" />
           </div>
           <span className="text-[11px] font-medium tracking-widest uppercase text-[var(--gv-accent-gold)] px-3 py-1 rounded-full bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/30">
-            Stage 8 Architecture
+            Source Grounding
           </span>
           <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-4 font-medium">
             Documents & Grounding
@@ -374,7 +446,7 @@ export default function App() {
             <Calendar className="w-7 h-7" />
           </div>
           <span className="text-[11px] font-medium tracking-widest uppercase text-[var(--gv-accent-gold)] px-3 py-1 rounded-full bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/30">
-            Stage 9 Architecture
+            Action Alignment
           </span>
           <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-4 font-medium">
             Commitments & Calendar

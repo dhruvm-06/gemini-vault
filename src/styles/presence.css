@@ -162,6 +162,77 @@
 }
 
 /* ============================================================================
+   State-Driven Dynamic Modifiers (Phase C)
+   ============================================================================ */
+
+/* — Listening: Gentle expansive breathing, reacts subtly to user voice — */
+.vault-presence-container[data-state="listening"] .vault-presence-aura {
+  opacity: calc(0.65 + var(--gv-presence-reactivity, 0) * 0.35);
+  transform: scale(calc(1 + var(--gv-presence-reactivity, 0) * 0.15));
+  transition: transform 120ms ease-out, opacity 120ms ease-out;
+}
+
+.vault-presence-container[data-state="listening"] .vault-presence-orbital-ring {
+  stroke-opacity: 0.65;
+}
+
+/* — Thinking: Inward cognitive contraction, accelerated lattice drift — */
+.vault-presence-container[data-state="thinking"] .vault-presence-aura {
+  animation: presence-aura-breathe 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  opacity: 0.85;
+}
+
+.vault-presence-container[data-state="thinking"] .vault-presence-lattice {
+  animation: presence-lattice-counter 18s linear infinite;
+}
+
+.vault-presence-container[data-state="thinking"] .vault-presence-core {
+  animation: presence-core-pulse 2s ease-in-out infinite alternate;
+}
+
+/* — Speaking: Radiant rhythmic pulse in sync with companion voice output — */
+.vault-presence-container[data-state="speaking"] .vault-presence-aura {
+  opacity: calc(0.75 + var(--gv-presence-reactivity, 0) * 0.25);
+  transform: scale(calc(1.05 + var(--gv-presence-reactivity, 0) * 0.22));
+  transition: transform 90ms ease-out, opacity 90ms ease-out;
+}
+
+.vault-presence-container[data-state="speaking"] .vault-presence-core {
+  transform: scale(calc(1 + var(--gv-presence-reactivity, 0) * 0.18));
+  transition: transform 90ms ease-out;
+}
+
+/* — Interrupted: Immediate rapid collapse reset — */
+.vault-presence-container[data-state="interrupted"] .vault-presence-aura,
+.vault-presence-container[data-state="interrupted"] .vault-presence-core {
+  transform: scale(0.92);
+  opacity: 0.5;
+  transition: transform 150ms ease-out, opacity 150ms ease-out;
+}
+
+/* — Reconnecting: Ambient golden shimmer — */
+.vault-presence-container[data-state="reconnecting"] .vault-presence-aura {
+  animation: presence-reconnect-shimmer 2s ease-in-out infinite alternate;
+}
+
+@keyframes presence-reconnect-shimmer {
+  0% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+/* — Ended / Muted: Calm, quiet rest state — */
+.vault-presence-container[data-state="ended"] .vault-presence-aura {
+  opacity: 0.25;
+  animation: none;
+}
+
+/* ============================================================================
    Accessibility: Reduced Motion
    ============================================================================ */
 @media (prefers-reduced-motion: reduce) {

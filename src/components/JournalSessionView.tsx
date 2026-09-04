@@ -19,6 +19,8 @@ import { useAuth } from '../context/AuthContext';
 import { JournalSession, JournalMessage, ContextRailItem } from '../types';
 import { FormattedResponse } from './FormattedResponse';
 import { MemoryReviewSection } from './MemoryReviewSection';
+import { VaultPresence } from './VaultPresence';
+import { VoiceStudioView } from './VoiceStudioView';
 
 /* ============================================================================
    Presentational Decomposition Components
@@ -42,6 +44,7 @@ interface ReflectHeaderProps {
   onCancelEditTitle: () => void;
   onTitleChange: (value: string) => void;
   onOpenConcludeModal: () => void;
+  onEnterVoiceMode?: () => void;
 }
 
 export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
@@ -55,6 +58,7 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
   onCancelEditTitle,
   onTitleChange,
   onOpenConcludeModal,
+  onEnterVoiceMode,
 }) => {
   const isContinued = Boolean(session?.continuedFromSessionId);
 
@@ -149,6 +153,20 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
               <span>Active</span>
             </span>
 
+            {onEnterVoiceMode && (
+              <button
+                type="button"
+                onClick={onEnterVoiceMode}
+                id="enter-voice-mode-btn"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs"
+                title="Enter Voice Reflection Studio"
+                aria-label="Enter Voice Reflection Studio"
+              >
+                <VaultPresence size="micro" state="idle" />
+                <span className="hidden sm:inline">Voice</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onOpenConcludeModal}
@@ -204,7 +222,7 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
 
       {calendarNotice && (
         <div className="mt-2 text-[11px] text-[var(--gv-accent-text)] bg-[var(--gv-accent-muted)] p-2 rounded-lg border border-[var(--gv-accent-border)]">
-          Calendar scheduling will be available in Stage 9 (Commitments & Calendar).
+          Calendar scheduling will be available soon with verified personal confirmation.
         </div>
       )}
 
@@ -262,6 +280,11 @@ export const TurnItem: React.FC<TurnItemProps> = ({ message, isLatest, registerR
           <div className="flex items-center gap-1.5 text-[11px] text-[var(--gv-text-tertiary)] font-sans uppercase tracking-wider mb-1.5">
             <User className="w-3 h-3 text-[var(--gv-text-tertiary)]" />
             <span className="font-medium">You</span>
+            {message.modality === 'voice' && (
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-accent)] font-sans lowercase tracking-normal">
+                spoken
+              </span>
+            )}
           </div>
 
           <div className="text-sm sm:text-[15px] font-sans text-[var(--gv-text-primary)] leading-relaxed whitespace-pre-wrap">
@@ -284,6 +307,16 @@ export const TurnItem: React.FC<TurnItemProps> = ({ message, isLatest, registerR
         <span className="font-serif font-medium tracking-wide text-xs text-[var(--gv-text-secondary)]">
           Gemini Vault
         </span>
+        {message.modality === 'voice' && (
+          <span className="text-[9px] px-1.5 py-0.2 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-accent)] font-sans lowercase tracking-normal">
+            spoken
+          </span>
+        )}
+        {message.interrupted && (
+          <span className="text-[10px] text-[var(--gv-text-muted)] italic font-sans lowercase tracking-normal">
+            (interrupted)
+          </span>
+        )}
       </div>
 
       <div
@@ -306,6 +339,7 @@ interface ReflectComposerProps {
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSend: () => void;
   onContinueSession?: () => void;
+  onEnterVoiceMode?: () => void;
 }
 
 export const ReflectComposer: React.FC<ReflectComposerProps> = ({
@@ -317,6 +351,7 @@ export const ReflectComposer: React.FC<ReflectComposerProps> = ({
   onKeyDown,
   onSend,
   onContinueSession,
+  onEnterVoiceMode,
 }) => {
   if (isCompleted) {
     return (
@@ -359,9 +394,23 @@ export const ReflectComposer: React.FC<ReflectComposerProps> = ({
           placeholder="Continue your reflection... (Enter to send, Shift+Enter for newline)"
           rows={1}
           disabled={isSending}
-          className="w-full p-3.5 sm:p-4 pr-14 bg-transparent text-[var(--gv-text-primary)] placeholder-[var(--gv-text-muted)] text-sm focus:outline-none resize-none font-sans leading-relaxed max-h-[220px]"
+          className="w-full p-3.5 sm:p-4 pr-20 bg-transparent text-[var(--gv-text-primary)] placeholder-[var(--gv-text-muted)] text-sm focus:outline-none resize-none font-sans leading-relaxed max-h-[220px]"
           aria-label="Reflection composer input"
         />
+
+        {onEnterVoiceMode && (
+          <button
+            type="button"
+            onClick={onEnterVoiceMode}
+            id="composer-voice-doorway-btn"
+            disabled={isSending}
+            className="absolute right-11 bottom-2.5 p-2 rounded-xl text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-raised)] transition cursor-pointer"
+            title="Enter Voice Reflection Studio"
+            aria-label="Enter Voice Reflection Studio"
+          >
+            <VaultPresence size="micro" state="idle" />
+          </button>
+        )}
 
         <button
           type="button"
@@ -392,6 +441,7 @@ interface JournalSessionViewProps {
   onContinueSession?: (sessionId: string) => Promise<void>;
   initialPrompt?: string;
   onContextItemsChange?: (items: ContextRailItem[]) => void;
+  initialMode?: 'text' | 'voice';
 }
 
 export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
@@ -400,15 +450,28 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   onContinueSession,
   initialPrompt,
   onContextItemsChange,
+  initialMode = 'text',
 }) => {
   const { getIdToken } = useAuth();
+
+  const [studioMode, setStudioMode] = useState<'text' | 'voice'>(initialMode);
+
+  useEffect(() => {
+    setStudioMode(initialMode);
+  }, [initialMode, sessionId]);
 
   const [session, setSession] = useState<SessionWithContinuation | null>(null);
   const [messages, setMessages] = useState<JournalMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loadingSession, setLoadingSession] = useState(true);
   const [isSending, setIsSending] = useState(false);
-  const [sendError, setSendError] = useState<{ message: string; lastFailedText?: string; clientMsgId?: string } | null>(null);
+  const [sendError, setSendError] = useState<{
+    title?: string;
+    message: string;
+    lastFailedText?: string;
+    clientMsgId?: string;
+    canReload?: boolean;
+  } | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [showConcludeModal, setShowConcludeModal] = useState(false);
@@ -545,10 +608,14 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   }, 100);
 }
     } catch (err: unknown) {
-  loadedSessionRef.current = null;
-  console.error('[JournalSessionView] Error loading session:', err);
-  setSendError({ message: 'Unable to retrieve conversation history. Please refresh.' });
-} finally {
+      loadedSessionRef.current = null;
+      console.error('[JournalSessionView] Error loading session:', err);
+      setSendError({
+        title: 'Connection Paused',
+        message: 'Your saved reflections remain secure in your private vault. Attempting to reconnect…',
+        canReload: true,
+      });
+    } finally {
       setLoadingSession(false);
       setTimeout(() => scrollToBottom('auto'), 150);
     }
@@ -682,7 +749,10 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 
     const token = await getIdToken();
     if (!token) {
-      setSendError({ message: 'Authentication required. Please sign in again.' });
+      setSendError({
+        title: 'Authentication Required',
+        message: 'Please sign in again to continue your reflection.',
+      });
       return;
     }
 
@@ -764,8 +834,9 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 }
     } catch (err: unknown) {
       console.error('[JournalSessionView] Send error:', err);
-      const errMsg = err instanceof Error ? err.message : 'An error occurred while contacting Gemini.';
+      const errMsg = err instanceof Error ? err.message : 'Unable to connect to Gemini companion.';
       setSendError({
+        title: 'Reflection Paused',
         message: errMsg,
         lastFailedText: text,
         clientMsgId,
@@ -857,6 +928,47 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 
   const isCompleted = session?.status === 'completed';
 
+  if (studioMode === 'voice' && !isCompleted) {
+    return (
+      <div className="flex flex-col h-full bg-[var(--gv-surface-base)] relative select-auto overflow-hidden">
+        <VoiceStudioView
+          sessionId={sessionId}
+          sessionTitle={session?.title || 'Reflection Session'}
+          messages={messages}
+          getIdToken={getIdToken}
+          onReturnToText={() => setStudioMode('text')}
+          onTurnPersisted={(turn) => {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === turn.id)) return prev;
+              return [...prev, turn];
+            });
+          }}
+          onInterrupted={(turnId, finalContent) => {
+            if (turnId && finalContent) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === turnId)) return prev;
+                return [
+                  ...prev,
+                  {
+                    id: turnId,
+                    role: 'assistant',
+                    content: finalContent,
+                    modality: 'voice',
+                    interrupted: true,
+                  },
+                ];
+              });
+            }
+          }}
+          onConcludeSession={() => {
+            setStudioMode('text');
+            setShowConcludeModal(true);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-[var(--gv-surface-base)] relative select-auto overflow-hidden">
       {/* 1. Restrained Session Header */}
@@ -871,6 +983,7 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
         onCancelEditTitle={() => setIsEditingTitle(false)}
         onTitleChange={setEditTitleValue}
         onOpenConcludeModal={() => setShowConcludeModal(true)}
+        onEnterVoiceMode={() => setStudioMode('voice')}
       />
 
       {/* 2. Main Studio Canvas — Dynamic Editorial Reading Measure */}
@@ -929,27 +1042,51 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
             </div>
           )}
 
-          {/* Retryable Error Banner */}
+          {/* Composed Error / Retry Banner */}
           {sendError && (
-            <div className="my-6 p-4 rounded-2xl bg-[var(--gv-error-muted)] border border-[var(--gv-error-border)] text-[var(--gv-error-text)] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-turn-enter">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-[var(--gv-error)] shrink-0 mt-0.5" />
+            <div
+              data-testid="reflection-error-banner"
+              className="my-6 p-4 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-turn-enter shadow-xs"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-[var(--gv-accent-gold)] shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-semibold block text-[var(--gv-error-text)]">Reflection Interrupted</span>
-                  <p className="mt-0.5 text-[11px] leading-relaxed opacity-90">{sendError.message}</p>
+                  <span className="font-medium block text-[var(--gv-text-primary)]">
+                    {sendError.title || 'Reflection Paused'}
+                  </span>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--gv-text-secondary)]">
+                    {sendError.message}
+                  </p>
                 </div>
               </div>
 
-              {sendError.lastFailedText && (
-                <button
-                  type="button"
-                  onClick={() => sendMessage(sendError.lastFailedText, sendError.clientMsgId)}
-                  className="px-3 py-1.5 rounded-xl bg-[var(--gv-accent)] text-white text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto shrink-0 hover:opacity-90 transition cursor-pointer shadow-xs"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Retry Reflection</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                {sendError.canReload && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoadingSession(true);
+                      setSendError(null);
+                      loadSession();
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[var(--gv-accent)] text-white text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 transition cursor-pointer shadow-xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reconnect</span>
+                  </button>
+                )}
+
+                {sendError.lastFailedText && (
+                  <button
+                    type="button"
+                    onClick={() => sendMessage(sendError.lastFailedText, sendError.clientMsgId)}
+                    className="px-3 py-1.5 rounded-xl bg-[var(--gv-accent)] text-white text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 transition cursor-pointer shadow-xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Retry Reflection</span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -969,6 +1106,7 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
             onKeyDown={handleKeyDown}
             onSend={() => sendMessage()}
             onContinueSession={onContinueSession ? () => onContinueSession(sessionId) : undefined}
+            onEnterVoiceMode={() => setStudioMode('voice')}
           />
         </div>
       </footer>

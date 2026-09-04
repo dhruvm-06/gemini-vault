@@ -17,8 +17,8 @@ interface ThemeContextType {
 const STORAGE_KEY = 'gemini-vault:theme';
 
 function getSystemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined') return 'morning';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'morning';
+  if (typeof window === 'undefined') return 'night';
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'morning' : 'night';
 }
 
 function resolve(pref: ThemePreference): ResolvedTheme {
@@ -30,7 +30,7 @@ function readStored(): ThemePreference {
     const v = localStorage.getItem(STORAGE_KEY);
     if (v === 'night' || v === 'morning' || v === 'system') return v;
   } catch { /* localStorage unavailable */ }
-  return 'morning';
+  return 'night';
 }
 
 function applyTheme(resolved: ResolvedTheme): void {

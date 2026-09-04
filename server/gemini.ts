@@ -36,6 +36,11 @@ export function getGeminiClient(): GoogleGenAI {
 }
 
 /**
+ * Primary model for real-time bidirectional audio reflection in Phase C.
+ */
+export const LIVE_VOICE_MODEL = 'gemini-3.1-flash-live-preview';
+
+/**
  * Model Fallback Ladder for normal journaling:
  * Uses Gemini 3.1 Flash-Lite as primary for conversational text interaction.
  */

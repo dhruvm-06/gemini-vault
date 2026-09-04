@@ -35,6 +35,9 @@ export const VaultPresence: React.FC<VaultPresenceProps> = ({
       className={`vault-presence-container ${className}`}
       data-state={state}
       data-size={size}
+      style={{
+        '--gv-presence-reactivity': audioReactivity,
+      } as React.CSSProperties}
       role="img"
       aria-label={ariaText}
     >

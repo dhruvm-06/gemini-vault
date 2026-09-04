@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="morning">
+<html lang="en" data-theme="night">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -10,7 +10,7 @@
     <meta property="og:description" content="Privacy-first personal AI journal with memory synthesis, longitudinal reflection, and secure Firestore isolation." />
     <script>
       // Prevent theme flash: read stored preference before first paint.
-      (function(){try{var t=localStorage.getItem('gemini-vault:theme');var r=t==='night'?'night':t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches?'night':'morning';document.documentElement.setAttribute('data-theme',r)}catch(e){}})();
+      (function(){try{var t=localStorage.getItem('gemini-vault:theme');var r=t==='morning'?'morning':(t==='system'&&window.matchMedia('(prefers-color-scheme: light)').matches)?'morning':'night';document.documentElement.setAttribute('data-theme',r)}catch(e){}})();
     </script>
   </head>
   <body class="antialiased min-h-screen">

@@ -1,14 +1,20 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { securityHeaders } from './server/middleware/securityHeaders';
 import { requireAuth, AuthenticatedRequest } from './server/middleware/auth';
 import journalRouter from './server/routes/journal';
 import memoriesRouter from './server/routes/memories';
+import { setupVoiceWebSocket } from './server/routes/voiceLive';
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  const httpServer = http.createServer(app);
+
+  // Setup WebSocket relay for Voice Reflection (Phase C)
+  setupVoiceWebSocket(httpServer);
 
   // Global Middleware
   app.use(securityHeaders);
@@ -63,7 +69,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[Gemini Vault] Server running at http://0.0.0.0:${PORT}`);
   });
 }

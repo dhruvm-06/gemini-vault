@@ -1,0 +1,253 @@
+/* ============================================================================
+   Gemini Vault — Design Tokens  (Phase 3A.1)
+   ============================================================================
+   Semantic theme tokens for Night Vault (dark, default) and Morning Vault
+   (light). Every token uses the `--gv-` namespace to avoid collisions with
+   Tailwind v4 internals.
+
+   Usage strategy:
+   - These tokens define the *design-system vocabulary* (surfaces, text,
+     borders, accents, elevation, radius, spacing scale, typography, motion).
+   - Existing component classNames remain UNCHANGED in this phase.
+   - Later subphases will migrate inline Tailwind classes → token utilities.
+   - Vault Presence (ambient SVG/CSS motion) will use `--gv-presence-*` tokens.
+
+   Theme switching:
+   - `data-theme="night"` or absent → Night Vault (default)
+   - `data-theme="morning"` → Morning Vault
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   Morning Vault (default light-first theme)
+   "Warm print editorial design meets an intelligent software studio."
+   --------------------------------------------------------------------------- */
+:root,
+[data-theme="morning"] {
+  color-scheme: light;
+
+  /* — Surfaces — */
+  --gv-surface-ground:       #faf8f5;   /* warm editorial ivory canvas     */
+  --gv-surface-base:         #ffffff;   /* crisp pure white reading sheet  */
+  --gv-surface-raised:       #f4f0e8;   /* warm stone tint for cards/pane  */
+  --gv-surface-rail:         #f8f5ee;   /* quiet contextual rail tint      */
+  --gv-surface-nav:          #141312;   /* near-black grounding rail       */
+  --gv-surface-nav-text:     #fafaf9;   /* contrast text on near-black     */
+  --gv-surface-overlay:      rgba(255, 255, 255, 0.94);
+
+  /* — Text — */
+  --gv-text-primary:         #1c1917;   /* deep charcoal stone (softer)    */
+  --gv-text-secondary:       #57534e;   /* mid stone 600 for UI controls   */
+  --gv-text-tertiary:        #8c857b;   /* muted warm stone for timestamps */
+  --gv-text-muted:           #a8a29e;   /* subtle hint stone 400           */
+  --gv-text-inverse:         #fafaf9;   /* stone-50                        */
+
+  /* — Borders — */
+  --gv-border-default:       #e7e2d8;   /* warm neutral border             */
+  --gv-border-subtle:        #f0ece3;   /* delicate separator              */
+  --gv-border-strong:        #c8c1b4;   /* defined active border           */
+
+  /* — Accent: Warm Amber & Burnished Gold — */
+  --gv-accent:               #b45309;   /* amber-700 (WCAG AA on light)    */
+  --gv-accent-hover:         #92400e;   /* amber-800                       */
+  --gv-accent-gold:          #c2883a;   /* burnished gold for presence     */
+  --gv-accent-muted:         rgba(180, 83, 9, 0.08);
+  --gv-accent-border:        rgba(180, 83, 9, 0.25);
+  --gv-accent-text:          #92400e;   /* amber-800                       */
+
+  /* — Semantic: Success — */
+  --gv-success:              #059669;   /* emerald-600                     */
+  --gv-success-muted:        rgba(5, 150, 105, 0.08);
+  --gv-success-border:       rgba(5, 150, 105, 0.25);
+
+  /* — Semantic: Error — */
+  --gv-error:                #e11d48;   /* rose-600                        */
+  --gv-error-muted:          rgba(225, 29, 72, 0.08);
+  --gv-error-border:         rgba(225, 29, 72, 0.25);
+  --gv-error-text:           #be123c;   /* rose-700                        */
+
+  /* — Elevation / Shadow (restrained, minimal) — */
+  --gv-shadow-sm:            0 1px 2px 0 rgba(28, 25, 23, 0.04);
+  --gv-shadow-md:            0 4px 6px -1px rgba(28, 25, 23, 0.06),
+                             0 2px 4px -2px rgba(28, 25, 23, 0.04);
+  --gv-shadow-lg:            0 10px 15px -3px rgba(28, 25, 23, 0.08),
+                             0 4px 6px -4px rgba(28, 25, 23, 0.04);
+  --gv-shadow-xl:            0 20px 25px -5px rgba(28, 25, 23, 0.08),
+                             0 8px 10px -6px rgba(28, 25, 23, 0.04);
+
+  /* — Focus ring — */
+  --gv-focus-ring:           rgba(180, 83, 9, 0.45);   /* amber-700/45    */
+  --gv-focus-ring-offset:    #faf8f5;
+
+  /* — Vault Presence — */
+  --gv-presence-core:        #c2883a;   /* burnished gold core             */
+  --gv-presence-ring:        #b45309;   /* warm amber orbital rings        */
+  --gv-presence-glow:        rgba(194, 136, 58, 0.16);
+  --gv-presence-pulse:       rgba(180, 83, 9, 0.08);
+
+  /* — Workspace Dimensions — */
+  --gv-sidebar-width:        230px;
+  --gv-rail-width:           320px;
+}
+
+/* ---------------------------------------------------------------------------
+   Night Vault (alternate dark theme)
+   --------------------------------------------------------------------------- */
+[data-theme="night"] {
+  color-scheme: dark;
+
+  /* — Surfaces — */
+  --gv-surface-ground:       #0c0a09;   /* stone-950 — deepest ground      */
+  --gv-surface-base:         #1c1917;   /* stone-900 — primary canvas      */
+  --gv-surface-raised:       #292524;   /* stone-800 — cards / raised pane  */
+  --gv-surface-rail:         #181615;   /* deep muted stone for rail       */
+  --gv-surface-nav:          #0c0a09;   /* obsidian navigation rail        */
+  --gv-surface-nav-text:     #fafaf9;   /* stone-50                        */
+  --gv-surface-overlay:      rgba(28, 25, 23, 0.94);
+
+  /* — Text — */
+  --gv-text-primary:         #fafaf9;   /* stone-50                        */
+  --gv-text-secondary:       #a8a29e;   /* stone-400                       */
+  --gv-text-tertiary:        #78716c;   /* stone-500                       */
+  --gv-text-muted:           #57534e;   /* stone-600                       */
+  --gv-text-inverse:         #0c0a09;   /* stone-950                       */
+
+  /* — Borders — */
+  --gv-border-default:       #292524;   /* stone-800                       */
+  --gv-border-subtle:        #201d1b;   /* muted dark divider              */
+  --gv-border-strong:        #44403c;   /* stone-700                       */
+
+  /* — Accent: Luminous Amber & Soft Gold — */
+  --gv-accent:               #f59e0b;   /* amber-500                       */
+  --gv-accent-hover:         #fbbf24;   /* amber-400                       */
+  --gv-accent-gold:          #fbbf24;   /* luminous soft gold              */
+  --gv-accent-muted:         rgba(245, 158, 11, 0.12);
+  --gv-accent-border:        rgba(245, 158, 11, 0.30);
+  --gv-accent-text:          #fcd34d;   /* amber-300                       */
+
+  /* — Semantic: Success — */
+  --gv-success:              #34d399;   /* emerald-400                     */
+  --gv-success-muted:        rgba(52, 211, 153, 0.10);
+  --gv-success-border:       rgba(52, 211, 153, 0.30);
+
+  /* — Semantic: Error — */
+  --gv-error:                #fb7185;   /* rose-400                        */
+  --gv-error-muted:          rgba(251, 113, 133, 0.12);
+  --gv-error-border:         rgba(159, 18, 57, 0.60);
+  --gv-error-text:           #fda4af;   /* rose-300                        */
+
+  /* — Elevation / Shadow — */
+  --gv-shadow-sm:            0 1px 2px 0 rgba(0, 0, 0, 0.40);
+  --gv-shadow-md:            0 4px 6px -1px rgba(0, 0, 0, 0.50),
+                             0 2px 4px -2px rgba(0, 0, 0, 0.40);
+  --gv-shadow-lg:            0 10px 15px -3px rgba(0, 0, 0, 0.60),
+                             0 4px 6px -4px rgba(0, 0, 0, 0.50);
+  --gv-shadow-xl:            0 20px 25px -5px rgba(0, 0, 0, 0.60),
+                             0 8px 10px -6px rgba(0, 0, 0, 0.50);
+
+  /* — Focus ring — */
+  --gv-focus-ring:           rgba(245, 158, 11, 0.50);  /* amber-500/50    */
+  --gv-focus-ring-offset:    #0c0a09;
+
+  /* — Vault Presence — */
+  --gv-presence-core:        #fbbf24;   /* luminous gold core              */
+  --gv-presence-ring:        #f59e0b;   /* glowing amber orbital rings     */
+  --gv-presence-glow:        rgba(245, 158, 11, 0.20);
+  --gv-presence-pulse:       rgba(245, 158, 11, 0.08);
+
+  /* — Workspace Dimensions — */
+  --gv-sidebar-width:        230px;
+  --gv-rail-width:           320px;
+}
+
+
+/* ============================================================================
+   Typography System
+   ============================================================================ */
+:root {
+  /* — Font stacks — */
+  --gv-font-serif:           ui-serif, Georgia, "Times New Roman", serif;
+  --gv-font-sans:            ui-sans-serif, system-ui, -apple-system,
+                             BlinkMacSystemFont, "Segoe UI", Roboto,
+                             "Helvetica Neue", Arial, sans-serif;
+  --gv-font-mono:            ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+                             Consolas, "Liberation Mono", monospace;
+
+  /* — Type scale (Major Third: 1.250) — */
+  --gv-text-xs:              0.6875rem;   /* 11px  */
+  --gv-text-sm:              0.8125rem;   /* 13px  */
+  --gv-text-base:            0.875rem;    /* 14px  */
+  --gv-text-md:              1rem;        /* 16px  */
+  --gv-text-lg:              1.125rem;    /* 18px  */
+  --gv-text-xl:              1.25rem;     /* 20px  */
+  --gv-text-2xl:             1.5rem;      /* 24px  */
+  --gv-text-3xl:             1.875rem;    /* 30px  */
+  --gv-text-4xl:             2.25rem;     /* 36px  */
+  --gv-text-5xl:             3rem;        /* 48px  */
+  --gv-text-display:         3.75rem;     /* 60px  */
+
+  /* — Leading — */
+  --gv-leading-tight:        1.15;
+  --gv-leading-snug:         1.35;
+  --gv-leading-normal:       1.5;
+  --gv-leading-relaxed:      1.7;
+
+  /* — Tracking — */
+  --gv-tracking-tight:       -0.015em;
+  --gv-tracking-normal:      0;
+  --gv-tracking-wide:        0.025em;
+  --gv-tracking-wider:       0.05em;
+  --gv-tracking-widest:      0.14em;
+}
+
+
+/* ============================================================================
+   Spacing & Radius Scale
+   ============================================================================ */
+:root {
+  /* — Spacing (4px base, matches Tailwind) — */
+  --gv-space-0:    0;
+  --gv-space-px:   1px;
+  --gv-space-0-5:  0.125rem;   /*  2px  */
+  --gv-space-1:    0.25rem;    /*  4px  */
+  --gv-space-1-5:  0.375rem;   /*  6px  */
+  --gv-space-2:    0.5rem;     /*  8px  */
+  --gv-space-2-5:  0.625rem;   /* 10px  */
+  --gv-space-3:    0.75rem;    /* 12px  */
+  --gv-space-4:    1rem;       /* 16px  */
+  --gv-space-5:    1.25rem;    /* 20px  */
+  --gv-space-6:    1.5rem;     /* 24px  */
+  --gv-space-8:    2rem;       /* 32px  */
+  --gv-space-10:   2.5rem;     /* 40px  */
+  --gv-space-12:   3rem;       /* 48px  */
+  --gv-space-16:   4rem;       /* 64px  */
+  --gv-space-20:   5rem;       /* 80px  */
+
+  /* — Border Radius — */
+  --gv-radius-sm:    0.375rem;   /*  6px  */
+  --gv-radius-md:    0.5rem;     /*  8px  */
+  --gv-radius-lg:    0.75rem;    /* 12px  */
+  --gv-radius-xl:    1rem;       /* 16px  */
+  --gv-radius-2xl:   1.25rem;    /* 20px  */
+  --gv-radius-3xl:   1.5rem;     /* 24px  */
+  --gv-radius-full:  9999px;
+
+  /* — Z-index scale — */
+  --gv-z-base:       0;
+  --gv-z-raised:     10;
+  --gv-z-sticky:     50;
+  --gv-z-overlay:    90;
+  --gv-z-modal:      100;
+  --gv-z-toast:      110;
+
+  /* — Transition durations — */
+  --gv-duration-fast:    100ms;
+  --gv-duration-normal:  200ms;
+  --gv-duration-slow:    350ms;
+  --gv-duration-slower:  500ms;
+
+  /* — Easing — */
+  --gv-ease-default:     cubic-bezier(0.4, 0, 0.2, 1);
+  --gv-ease-in:          cubic-bezier(0.4, 0, 1, 1);
+  --gv-ease-out:         cubic-bezier(0, 0, 0.2, 1);
+  --gv-ease-bounce:      cubic-bezier(0.34, 1.56, 0.64, 1);
+}

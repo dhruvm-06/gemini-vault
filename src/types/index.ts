@@ -105,3 +105,5 @@ export interface SaveMemoryRequest {
   userNotes?: string;
   confidence?: number;
 }
+
+export type AppView = 'home' | 'vault' | 'intelligence';

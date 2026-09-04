@@ -1,0 +1,180 @@
+/* ============================================================================
+   Gemini Vault — Vault Presence Animation Engine (Pure CSS/SVG)
+   ============================================================================
+   An original celestial visual intelligence core representing living
+   reflection. Zero canvas, zero WebGL, zero external animation libraries.
+   ============================================================================ */
+
+.vault-presence-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  contain: layout style;
+}
+
+/* — Size Variants — */
+.vault-presence-container[data-size="micro"] {
+  width: 20px;
+  height: 20px;
+}
+
+.vault-presence-container[data-size="compact"] {
+  width: 36px;
+  height: 36px;
+}
+
+.vault-presence-container[data-size="medium"] {
+  width: 80px;
+  height: 80px;
+}
+
+.vault-presence-container[data-size="large"] {
+  width: 160px;
+  height: 160px;
+}
+
+.vault-presence-container[data-size="hero"] {
+  width: 240px;
+  height: 240px;
+}
+
+/* — Ambient Atmosphere Aura (Diffused Breathing) — */
+.vault-presence-aura {
+  position: absolute;
+  inset: 10%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    var(--gv-presence-glow) 0%,
+    var(--gv-presence-pulse) 50%,
+    transparent 75%
+  );
+  filter: blur(24px);
+  pointer-events: none;
+  transform: translateZ(0);
+  animation: presence-aura-breathe 7s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+.vault-presence-container[data-size="micro"] .vault-presence-aura {
+  filter: blur(6px);
+}
+
+.vault-presence-container[data-size="compact"] .vault-presence-aura {
+  filter: blur(10px);
+}
+
+.vault-presence-container[data-size="large"] .vault-presence-aura,
+.vault-presence-container[data-size="hero"] .vault-presence-aura {
+  filter: blur(36px);
+}
+
+/* — SVG Surface — */
+.vault-presence-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: translateZ(0);
+}
+
+/* — Celestial Outer Ring (Slow Organic Drift) — */
+.vault-presence-orbital-ring {
+  transform-origin: center;
+  animation: presence-orbital-drift 75s linear infinite;
+  transition: stroke var(--gv-duration-normal) var(--gv-ease-default);
+}
+
+/* — Concentric Harmonic Resonator (Subtle Breathing Pulse) — */
+.vault-presence-resonator {
+  transform-origin: center;
+  animation: presence-resonator-breathe 6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+}
+
+/* — Celestial Petal Lattice (Inner Core Geometry) — */
+.vault-presence-lattice {
+  transform-origin: center;
+  animation: presence-lattice-counter 45s linear infinite;
+}
+
+/* — Core Focal Star (Ambient Hearth) — */
+.vault-presence-core {
+  transform-origin: center;
+  animation: presence-core-pulse 4.5s ease-in-out infinite alternate;
+}
+
+/* ============================================================================
+   Keyframe Animations (Hardware-accelerated transforms & opacity only)
+   ============================================================================ */
+
+@keyframes presence-aura-breathe {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 0.95;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes presence-orbital-drift {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes presence-resonator-breathe {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+@keyframes presence-lattice-counter {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes presence-core-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+   Accessibility: Reduced Motion
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .vault-presence-aura,
+  .vault-presence-orbital-ring,
+  .vault-presence-resonator,
+  .vault-presence-lattice,
+  .vault-presence-core {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .vault-presence-aura {
+    opacity: 0.7 !important;
+  }
+}

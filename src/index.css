@@ -1,7 +1,130 @@
-@import "tailwindcss";
+/* ============================================================================
+   Gemini Vault — Global Stylesheet  (Phase 3A.1)
+   ============================================================================
+   Import order matters:
+   1. Tailwind base/utilities (via @import "tailwindcss")
+   2. Design tokens (custom properties)
+   3. Base layer overrides (border reset, focus, reduced-motion)
+   ============================================================================ */
 
+@import "tailwindcss";
+@import "./styles/tokens.css";
+
+/* ---------------------------------------------------------------------------
+   Base layer: resets and defaults that work WITH Tailwind classes.
+
+   IMPORTANT — the previous global rule set:
+     * { border-color: var(--color-stone-200, #e7e5e4); }
+   This applied a LIGHT border color to ALL elements in a dark-themed app.
+   Replaced below with a dark-appropriate default that uses our token.
+   --------------------------------------------------------------------------- */
 @layer base {
+  /* Fix: default border-color now matches the active theme */
   * {
-    border-color: var(--color-stone-200, #e7e5e4);
+    border-color: var(--gv-border-default);
+  }
+
+  /* Antialiased text rendering (preserved from previous body class) */
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Base surface + text from tokens.
+     These apply UNDERNEATH component Tailwind classes (bg-stone-900, etc.)
+     so existing components continue to work identically. The benefit is:
+     - Flash-free initial paint (body no longer has conflicting light classes)
+     - Morning Vault theme can flip everything via data-theme="morning"      */
+  body {
+    background-color: var(--gv-surface-base);
+    color: var(--gv-text-primary);
+    font-family: var(--gv-font-sans);
+  }
+
+  /* =========================================================================
+     Focus States
+     =========================================================================
+     Accessible focus ring using the design token. Applied to interactive
+     elements that receive keyboard focus. The `:focus-visible` selector
+     ensures mouse clicks don't show the ring (browser heuristic).          */
+  :focus-visible {
+    outline: 2px solid var(--gv-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Some elements (buttons inside forms, textarea) get a double-ring from
+     Tailwind's default + our custom one. This removes Tailwind's default
+     ring only when our :focus-visible ring is showing.                     */
+  :focus-visible:where(button, [role="button"], input, textarea, select, a) {
+    outline: 2px solid var(--gv-focus-ring);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  /* Allow components to explicitly opt out (e.g., chat canvas click target) */
+  [data-no-focus-ring]:focus-visible {
+    outline: none;
+  }
+
+  /* =========================================================================
+     Reduced Motion
+     =========================================================================
+     Users who prefer reduced motion get:
+     - All transitions collapsed to near-zero
+     - All animations paused
+     - Scroll behavior becomes instant
+
+     This is a base-layer override. Individual components can use
+     @media (prefers-reduced-motion: reduce) for fine-grained control,
+     or Tailwind's motion-safe: / motion-reduce: variants.                 */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Utility layer: custom utilities available as classes.
+   These supplement Tailwind utilities and can be used in components.
+   --------------------------------------------------------------------------- */
+@layer utilities {
+  /* Theme surface utilities — use in later subphases */
+  .gv-surface-ground  { background-color: var(--gv-surface-ground); }
+  .gv-surface-base    { background-color: var(--gv-surface-base); }
+  .gv-surface-raised  { background-color: var(--gv-surface-raised); }
+  .gv-surface-overlay { background-color: var(--gv-surface-overlay); }
+
+  /* Theme text utilities */
+  .gv-text-primary    { color: var(--gv-text-primary); }
+  .gv-text-secondary  { color: var(--gv-text-secondary); }
+  .gv-text-tertiary   { color: var(--gv-text-tertiary); }
+  .gv-text-muted      { color: var(--gv-text-muted); }
+
+  /* Theme border utilities */
+  .gv-border          { border-color: var(--gv-border-default); }
+  .gv-border-subtle   { border-color: var(--gv-border-subtle); }
+  .gv-border-strong   { border-color: var(--gv-border-strong); }
+
+  /* Vault Presence — ambient glow placeholder (CSS-only, no JS) */
+  .gv-presence-glow {
+    box-shadow: 0 0 40px 8px var(--gv-presence-glow),
+                0 0 80px 20px var(--gv-presence-pulse);
+  }
+
+  /* Fade-in animation used by MemoryReviewSection */
+  @keyframes gv-fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in {
+    animation: gv-fade-in 0.35s var(--gv-ease-out);
   }
 }

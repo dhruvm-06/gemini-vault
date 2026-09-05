@@ -117,7 +117,7 @@ Reflect → Understand → Remember → Notice Change → Plan → Act → Refle
 
 ### 5. Commitments & Planning Calendar
 - **Commitment Timeline**: Longitudinal view of promises, deadlines, and intentions extracted from your journal.
-- **"Summarize My Week"**: Instant executive overview of upcoming priorities and scheduled loops.
+- **Suggested Focus & Loop Tracking**: Deterministic focus recommendation and status tracking for open, snoozed, and resolved intentions.
 - **Seasonal & Holiday Planning Catalog**: Deterministic awareness of upcoming seasons, quarters, and global holidays to prompt timely reflection.
 - **One-Click Calendar Handoff**: Every commitment card includes an authentic **Add to Google Calendar** link pre-filled with context.
 

@@ -23,15 +23,6 @@ import {
   PlanningOpportunity,
 } from '../utils/actionHandoffs';
 
-export interface CalendarWeekSummaryData {
-  activeCommitmentsCount?: number;
-  snoozedLoopsCount?: number;
-  resolvedLoopsCount?: number;
-  topCommitments?: string[];
-  upcomingSnoozed?: string[];
-  recentAchievements?: string[];
-  focusRecommendation?: string;
-}
 
 interface CommitmentsCalendarViewProps {
   onOpenSession?: (sessionId: string) => void;
@@ -63,41 +54,6 @@ export const CommitmentsCalendarView: React.FC<CommitmentsCalendarViewProps> = (
   const [snoozeDays, setSnoozeDays] = useState<number>(7);
   const [isSnoozing, setIsSnoozing] = useState(false);
 
-  // Week summary state
-  const [weekSummary, setWeekSummary] = useState<CalendarWeekSummaryData | null>(null);
-  const [isSummarizingWeek, setIsSummarizingWeek] = useState(false);
-  const [weekSummaryError, setWeekSummaryError] = useState<string | null>(null);
-
-  const handleSummarizeWeek = async () => {
-    if (isSummarizingWeek) return;
-    setIsSummarizingWeek(true);
-    setWeekSummaryError(null);
-    try {
-      const token = await getIdToken();
-      if (!token) throw new Error('Authentication required.');
-      const res = await fetch('/api/memories/calendar-summary', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Unable to summarize calendar week.');
-      if (data.summary && typeof data.summary === 'object') {
-        setWeekSummary(data.summary as CalendarWeekSummaryData);
-      } else if (typeof data.summary === 'string') {
-        setWeekSummary({ focusRecommendation: data.summary });
-      } else {
-        setWeekSummary({});
-      }
-    } catch (err: unknown) {
-      console.error('[CommitmentsCalendar] Summarize week error:', err);
-      setWeekSummaryError(err instanceof Error ? err.message : 'Unable to summarize week.');
-    } finally {
-      setIsSummarizingWeek(false);
-    }
-  };
 
 
   const upcomingOpportunities = useMemo(() => {
@@ -370,21 +326,6 @@ export const CommitmentsCalendarView: React.FC<CommitmentsCalendarViewProps> = (
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={handleSummarizeWeek}
-            disabled={isSummarizingWeek}
-            id="summarize-week-btn"
-            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] text-[var(--gv-text-primary)] text-xs font-medium transition active:scale-[0.98] cursor-pointer disabled:opacity-50 shadow-2xs"
-          >
-            {isSummarizingWeek ? (
-              <Loader2 className="w-3.5 h-3.5 text-[var(--gv-accent-gold)] animate-spin" />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
-            )}
-            <span>{isSummarizingWeek ? 'Summarizing...' : 'Summarize My Week'}</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setIsAddModalOpen(true)}
             className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-white text-xs font-semibold shadow-xs transition active:scale-[0.98] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)]"
           >
@@ -394,124 +335,6 @@ export const CommitmentsCalendarView: React.FC<CommitmentsCalendarViewProps> = (
         </div>
       </div>
 
-      {/* Week Calendar Summary Card (Structured Rendering Boundary) */}
-      {weekSummary && (
-        <div
-          data-testid="calendar-week-summary-card"
-          className="mb-8 p-5 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-accent-border)] shadow-xs animate-turn-enter"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-medium text-[var(--gv-accent)]">
-              <Sparkles className="w-4 h-4 text-[var(--gv-accent-gold)]" />
-              <span className="font-serif text-sm font-medium">Calendar Reflection Synthesis</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setWeekSummary(null)}
-              className="p-1 text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
-              aria-label="Dismiss week summary"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Focus recommendation lead */}
-          {weekSummary.focusRecommendation && (
-            <p className="mt-3 font-serif text-sm text-[var(--gv-text-primary)] leading-relaxed bg-[var(--gv-surface-ground)]/60 p-3.5 rounded-xl border border-[var(--gv-border-subtle)]">
-              {weekSummary.focusRecommendation}
-            </p>
-          )}
-
-          {/* Structured metrics grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-3.5">
-            <div className="px-3.5 py-2.5 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)]">
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--gv-text-tertiary)] block">
-                Active Commitments
-              </span>
-              <span className="text-base font-serif font-medium text-[var(--gv-accent)]">
-                {weekSummary.activeCommitmentsCount ?? 0}
-              </span>
-            </div>
-            <div className="px-3.5 py-2.5 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)]">
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--gv-text-tertiary)] block">
-                Snoozed Loops
-              </span>
-              <span className="text-base font-serif font-medium text-[var(--gv-text-secondary)]">
-                {weekSummary.snoozedLoopsCount ?? 0}
-              </span>
-            </div>
-            <div className="px-3.5 py-2.5 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)]">
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--gv-text-tertiary)] block">
-                Resolved Achievements
-              </span>
-              <span className="text-base font-serif font-medium text-[var(--gv-success)]">
-                {weekSummary.resolvedLoopsCount ?? 0}
-              </span>
-            </div>
-          </div>
-
-          {/* Top Commitments */}
-          {Array.isArray(weekSummary.topCommitments) && weekSummary.topCommitments.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-[var(--gv-border-subtle)]">
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--gv-text-tertiary)]">
-                Priority Commitments
-              </span>
-              <ul className="mt-2 space-y-1.5 text-xs text-[var(--gv-text-secondary)]">
-                {weekSummary.topCommitments.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="text-[var(--gv-accent)] mt-0.5">•</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Recent Achievements */}
-          {Array.isArray(weekSummary.recentAchievements) && weekSummary.recentAchievements.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-[var(--gv-border-subtle)]">
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--gv-text-tertiary)]">
-                Recent Loop Closures
-              </span>
-              <ul className="mt-2 space-y-1.5 text-xs text-[var(--gv-text-secondary)]">
-                {weekSummary.recentAchievements.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--gv-success)] shrink-0 mt-0.5" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Empty / Zero data fallback */}
-          {!weekSummary.activeCommitmentsCount &&
-            !weekSummary.snoozedLoopsCount &&
-            !weekSummary.resolvedLoopsCount &&
-            !weekSummary.focusRecommendation && (
-              <p className="mt-2.5 text-xs text-[var(--gv-text-secondary)]">
-                No commitments or active loops recorded for this week yet. You can add one below or reflect to surface new intentions.
-              </p>
-            )}
-        </div>
-      )}
-
-      {/* Week Summary Error Banner */}
-      {weekSummaryError && (
-        <div className="mb-6 p-3.5 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] text-xs text-[var(--gv-text-secondary)] flex items-center justify-between shadow-2xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-[var(--gv-accent-gold)] shrink-0" />
-            <span>{weekSummaryError}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setWeekSummaryError(null)}
-            className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] ml-2 text-xs cursor-pointer p-1"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
 
       {/* Suggested Focus Banner (Deterministic recommendation from existing open loops) */}
       {suggestedFocus && filterTab !== 'resolved' && (

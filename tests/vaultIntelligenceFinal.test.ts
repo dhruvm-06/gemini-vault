@@ -200,7 +200,7 @@ test('12. Reflection Mode Instructions: All 7 modes bounded and non-clinical', (
   }
 });
 
-test('13. Calendar "Summarize My Week" Typed Rendering Boundary: Fixes React object-child defect and handles all states safely', () => {
+test('13. Calendar "Summarize My Week" Complete Removal & Core Calendar Independence', () => {
   const calendarComponentPath = path.resolve(__dirname, '../src/components/CommitmentsCalendarView.tsx');
   const memoriesRoutePath = path.resolve(__dirname, '../server/routes/memories.ts');
 
@@ -210,84 +210,59 @@ test('13. Calendar "Summarize My Week" Typed Rendering Boundary: Fixes React obj
   const calendarSrc = fs.readFileSync(calendarComponentPath, 'utf8');
   const memoriesRouteSrc = fs.readFileSync(memoriesRoutePath, 'utf8');
 
-  // 1. Endpoint POST /api/memories/calendar-summary must exist and return structured summary
-  assert.ok(memoriesRouteSrc.includes('/calendar-summary'), 'Server must provide /calendar-summary route');
-  assert.ok(memoriesRouteSrc.includes('activeCommitmentsCount:'), 'Server returns activeCommitmentsCount');
-  assert.ok(memoriesRouteSrc.includes('focusRecommendation:'), 'Server returns focusRecommendation');
-
-  // 2. UI must have "Summarize My Week" button with stable id and loading spinner
-  assert.ok(calendarSrc.includes('id="summarize-week-btn"'), 'Summarize My Week button must exist');
-  assert.ok(calendarSrc.includes('Summarize My Week'), 'Summarize My Week label must be present');
-  assert.ok(calendarSrc.includes('isSummarizingWeek'), 'isSummarizingWeek loading state must be managed');
-
-  // 3. Typed rendering boundary: Never render raw object as React child
-  // The bug was `<p ...>{weekSummary}</p>` when weekSummary was an object.
-  // The fix maps fields explicitly: {weekSummary.focusRecommendation}, {weekSummary.activeCommitmentsCount ?? 0}, etc.
-  assert.ok(calendarSrc.includes('interface CalendarWeekSummaryData'), 'Must define typed summary contract');
-  assert.ok(
-    calendarSrc.includes('{weekSummary.focusRecommendation}'),
-    'Must render focusRecommendation string explicitly'
-  );
-  assert.ok(
-    calendarSrc.includes('{weekSummary.activeCommitmentsCount ?? 0}'),
-    'Must render activeCommitmentsCount safely'
-  );
-  assert.ok(
-    calendarSrc.includes('{weekSummary.snoozedLoopsCount ?? 0}'),
-    'Must render snoozedLoopsCount safely'
-  );
-  assert.ok(
-    calendarSrc.includes('{weekSummary.resolvedLoopsCount ?? 0}'),
-    'Must render resolvedLoopsCount safely'
-  );
-
-  // Verify dangerous pattern `{weekSummary}` alone in a paragraph does not exist
+  // 1. Endpoint POST /api/memories/calendar-summary must be completely removed
   assert.equal(
-    calendarSrc.includes('>{weekSummary}<'),
+    memoriesRouteSrc.includes('/calendar-summary'),
     false,
-    'Must NEVER render raw weekSummary object directly as a React child'
+    'Server must NOT provide /calendar-summary route'
   );
 
-  // 4. Safe fallback for empty/zero data and error state handling
-  assert.ok(calendarSrc.includes('No commitments or active loops recorded'), 'Must handle zero data gracefully');
-  assert.ok(calendarSrc.includes('weekSummaryError'), 'Must handle error state without crashing');
+  // 2. UI must NOT have "Summarize My Week" button, state, or summary card
+  assert.equal(
+    calendarSrc.includes('id="summarize-week-btn"'),
+    false,
+    'Summarize My Week button ID must be removed'
+  );
+  assert.equal(
+    calendarSrc.includes('Summarize My Week'),
+    false,
+    'Summarize My Week label must be removed'
+  );
+  assert.equal(
+    calendarSrc.includes('isSummarizingWeek'),
+    false,
+    'isSummarizingWeek state must be removed'
+  );
+  assert.equal(
+    calendarSrc.includes('weekSummary'),
+    false,
+    'weekSummary state and card must be removed'
+  );
+  assert.equal(
+    calendarSrc.includes('weekSummaryError'),
+    false,
+    'weekSummaryError state and banner must be removed'
+  );
+  assert.equal(
+    calendarSrc.includes('CalendarWeekSummaryData'),
+    false,
+    'CalendarWeekSummaryData interface must be removed'
+  );
+  assert.equal(
+    calendarSrc.includes('/api/memories/calendar-summary'),
+    false,
+    'Endpoint reference must be removed from client'
+  );
 
-  // 5. Reproduction test: Verify structured object evaluation logic
-  const mockServerResponse = {
-    activeCommitmentsCount: 3,
-    snoozedLoopsCount: 1,
-    resolvedLoopsCount: 5,
-    topCommitments: ['Launch Gemini Vault v1', 'Review sprint goals'],
-    upcomingSnoozed: ['Travel booking'],
-    recentAchievements: ['Shipped production build'],
-    focusRecommendation: 'Primary focus recommendation: "Launch Gemini Vault v1"',
-  };
+  // 3. Core Calendar features remain fully intact and independent
+  assert.ok(calendarSrc.includes('+ Add commitment'), 'Header must preserve "+ Add commitment" action');
+  assert.ok(calendarSrc.includes('setIsAddModalOpen'), 'Add commitment modal must remain functional');
+  assert.ok(calendarSrc.includes('snoozeTargetMemory'), 'Snoozing loops must remain functional');
+  assert.ok(calendarSrc.includes('createGoogleCalendarUrl'), 'Google Calendar handoffs must remain functional');
+  assert.ok(calendarSrc.includes('getUpcomingPlanningOpportunities'), 'Planning catalog must remain functional');
+  assert.ok(calendarSrc.includes('Suggested Focus'), 'Deterministic suggested focus must remain functional');
 
-  // Pure function representing our rendering boundary
-  const renderSummaryFields = (data: typeof mockServerResponse) => {
-    return {
-      focusText: typeof data.focusRecommendation === 'string' ? data.focusRecommendation : '',
-      activeCount: Number(data.activeCommitmentsCount ?? 0),
-      snoozedCount: Number(data.snoozedLoopsCount ?? 0),
-      resolvedCount: Number(data.resolvedLoopsCount ?? 0),
-      commitments: Array.isArray(data.topCommitments) ? data.topCommitments.map(String) : [],
-      achievements: Array.isArray(data.recentAchievements) ? data.recentAchievements.map(String) : [],
-    };
-  };
-
-  const rendered = renderSummaryFields(mockServerResponse);
-  assert.equal(typeof rendered.focusText, 'string');
-  assert.equal(typeof rendered.activeCount, 'number');
-  assert.equal(rendered.activeCount, 3);
-  assert.equal(rendered.commitments.length, 2);
-
-  // Empty state handling
-  const emptyRendered = renderSummaryFields({} as any);
-  assert.equal(emptyRendered.activeCount, 0);
-  assert.equal(emptyRendered.focusText, '');
-  assert.equal(emptyRendered.commitments.length, 0);
-
-  // 6. Navigation to calendar route remains strictly valid
+  // 4. Navigation to calendar route remains strictly valid
   assert.equal(isValidNavigationTarget('calendar'), true);
   assert.equal(targetToView('calendar')?.view, 'calendar');
 });

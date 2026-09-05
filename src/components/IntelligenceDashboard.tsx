@@ -102,6 +102,45 @@ export const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ on
   const [signalPreview, setSignalPreview] = useState<Signal[]>([]);
   const [range, setRange] = useState<'7d' | '30d'>('7d');
 
+  const [weeklyReview, setWeeklyReview] = useState<{
+    summary: string;
+    evidence: string[];
+    interpretation: string[];
+    suggestions: string[];
+    stats: {
+      sessionsCount: number;
+      memoriesCount: number;
+      openLoopsCount: number;
+    };
+  } | null>(null);
+  const [isGeneratingWeeklyReview, setIsGeneratingWeeklyReview] = useState(false);
+  const [weeklyReviewError, setWeeklyReviewError] = useState<string | null>(null);
+
+  const handleGenerateWeeklyReview = async () => {
+    if (isGeneratingWeeklyReview) return;
+    setIsGeneratingWeeklyReview(true);
+    setWeeklyReviewError(null);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error('Authentication required.');
+      const res = await fetch('/api/memories/weekly-review', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to generate weekly review.');
+      setWeeklyReview(data.review);
+    } catch (err: unknown) {
+      console.error('[IntelligenceDashboard] Weekly review error:', err);
+      setWeeklyReviewError(err instanceof Error ? err.message : 'Unable to generate weekly review.');
+    } finally {
+      setIsGeneratingWeeklyReview(false);
+    }
+  };
+
   useEffect(() => {
     if (userProfile?.preferences?.evidenceVisibility) {
       setShowEvidence(userProfile.preferences.evidenceVisibility === 'expanded');
@@ -832,11 +871,23 @@ export const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ on
           </div>
 
           <div className="rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-base)] p-5 sm:p-6 shadow-xs">
-            <div className="flex items-center gap-2 text-[var(--gv-text-primary)]">
-              <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <h2 className="text-base font-semibold">Weekly Review</h2>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-[var(--gv-text-primary)]">
+                <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <h2 className="text-base font-semibold">Weekly Review</h2>
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerateWeeklyReview}
+                disabled={isGeneratingWeeklyReview}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] text-xs font-medium text-[var(--gv-text-primary)] hover:text-[var(--gv-accent)] transition cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+                <span>{isGeneratingWeeklyReview ? 'Synthesizing...' : weeklyReview ? 'Refresh Review' : 'Generate Grounded Review'}</span>
+              </button>
             </div>
-            <p className="mt-1 text-xs text-[var(--gv-text-tertiary)]">A quick, deterministic snapshot before deeper synthesis.</p>
+            <p className="mt-1 text-xs text-[var(--gv-text-tertiary)]">Longitudinal reflection review grounded in verified vault memories.</p>
+
             <div className="mt-4 grid grid-cols-3 gap-2.5">
               <div className="rounded-xl bg-[var(--gv-surface-ground)]/60 border border-[var(--gv-border-subtle)] p-3.5 text-center sm:text-left">
                 <div className="text-xs font-medium text-[var(--gv-text-tertiary)]">Explored</div>
@@ -857,9 +908,96 @@ export const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ on
                 </div>
               </div>
             </div>
-            <p className="mt-4 text-xs sm:text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">
-              The full AI-written weekly review will be added once the reflection summary model and grounding contract are in place.
-            </p>
+
+            {weeklyReviewError && (
+              <div className="mt-4 p-3 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] text-xs text-[var(--gv-text-secondary)] flex items-center justify-between">
+                <span>{weeklyReviewError}</span>
+                <button
+                  type="button"
+                  onClick={() => setWeeklyReviewError(null)}
+                  className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] ml-2 text-xs"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {isGeneratingWeeklyReview && (
+              <div className="mt-5 p-4 rounded-xl bg-[var(--gv-surface-ground)]/60 border border-[var(--gv-border-subtle)] flex items-center gap-3 text-xs text-[var(--gv-text-secondary)] animate-pulse">
+                <Sparkles className="w-4 h-4 text-[var(--gv-accent-gold)] animate-spin" />
+                <span>Synthesizing longitudinal trajectories and grounded weekly evidence...</span>
+              </div>
+            )}
+
+            {weeklyReview && !isGeneratingWeeklyReview && (
+              <div className="mt-5 space-y-4 pt-4 border-t border-[var(--gv-border-subtle)] animate-turn-enter">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--gv-text-tertiary)]">
+                    Weekly Synthesis
+                  </h3>
+                  <p className="mt-1.5 font-serif text-sm text-[var(--gv-text-primary)] leading-relaxed">
+                    {weeklyReview.summary}
+                  </p>
+                </div>
+
+                {/* Evidence Section */}
+                {weeklyReview.evidence && weeklyReview.evidence.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-[var(--gv-surface-ground)]/70 border border-[var(--gv-border-subtle)]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--gv-accent)] block mb-2">
+                      1. Grounded Evidence (Verified Vault Facts)
+                    </span>
+                    <ul className="space-y-1.5 text-xs text-[var(--gv-text-secondary)]">
+                      {weeklyReview.evidence.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-[var(--gv-accent)] font-semibold mt-0.5">•</span>
+                          <span className="leading-relaxed">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Interpretation Section */}
+                {weeklyReview.interpretation && weeklyReview.interpretation.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-[var(--gv-surface-ground)]/70 border border-[var(--gv-border-subtle)]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-2">
+                      2. Longitudinal Interpretation (Themes & Trajectory)
+                    </span>
+                    <ul className="space-y-1.5 text-xs text-[var(--gv-text-secondary)]">
+                      {weeklyReview.interpretation.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-emerald-500 font-semibold mt-0.5">•</span>
+                          <span className="leading-relaxed">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Suggestions Section */}
+                {weeklyReview.suggestions && weeklyReview.suggestions.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-[var(--gv-surface-ground)]/70 border border-[var(--gv-border-subtle)]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block mb-2">
+                      3. Forward Planning Suggestions
+                    </span>
+                    <ul className="space-y-1.5 text-xs text-[var(--gv-text-secondary)]">
+                      {weeklyReview.suggestions.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-amber-500 font-semibold mt-0.5">•</span>
+                          <span className="leading-relaxed">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!weeklyReview && !isGeneratingWeeklyReview && (
+              <div className="mt-4 flex items-center justify-between text-xs text-[var(--gv-text-tertiary)] pt-2 border-t border-[var(--gv-border-subtle)]">
+                <span>Deterministic snapshot above. Click above to synthesize full longitudinal review.</span>
+              </div>
+            )}
           </div>
         </section>
       </div>

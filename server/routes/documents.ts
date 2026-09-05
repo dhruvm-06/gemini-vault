@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { adminDb } from '../firebaseAdmin';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
-import { getGeminiClient } from '../gemini';
+import { getGeminiClient, generateDocumentSummary, extractDocumentActions } from '../gemini';
 import {
   VaultDocument,
   VaultDocumentChunk,
@@ -580,6 +580,137 @@ router.post(
       res.status(500).json({
         success: false,
         error: 'An error occurred while answering your question from documents.',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/documents/:id/summarize
+ * Grounded on-demand summary of an uploaded document using its indexed chunks.
+ */
+router.post(
+  '/:id/summarize',
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.uid;
+      const documentId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+      if (!documentId || !/^[a-zA-Z0-9_-]{1,128}$/.test(documentId)) {
+        res.status(400).json({ success: false, error: 'Invalid document ID format.' });
+        return;
+      }
+
+      // Verify ownership
+      const docRef = adminDb.collection('users').doc(userId).collection('documents').doc(documentId);
+      const docSnap = await docRef.get();
+      if (!docSnap.exists) {
+        res.status(404).json({ success: false, error: 'Document not found or unauthorized.' });
+        return;
+      }
+
+      const docData = docSnap.data() as VaultDocument;
+
+      // Fetch chunks belonging to this document
+      const chunksSnap = await adminDb
+        .collection('users')
+        .doc(userId)
+        .collection('chunks')
+        .where('documentId', '==', documentId)
+        .orderBy('chunkIndex', 'asc')
+        .limit(20)
+        .get();
+
+      const chunks = chunksSnap.docs.map((d) => d.data() as VaultDocumentChunk);
+      if (chunks.length === 0) {
+        res.status(400).json({ success: false, error: 'Document has no indexed text chunks.' });
+        return;
+      }
+
+      const summaryResult = await generateDocumentSummary(docData.filename, chunks);
+
+      res.json({
+        success: true,
+        documentId,
+        filename: docData.filename,
+        summary: summaryResult.summary,
+        keyTakeaways: summaryResult.keyTakeaways,
+      });
+    } catch (err: any) {
+      console.error('[Document Summarize Error]:', err);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to generate document summary.',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/documents/:id/extract-actions
+ * Extracts actionable suggestions from an uploaded document.
+ */
+router.post(
+  '/:id/extract-actions',
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.uid;
+      const documentId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+      if (!documentId || !/^[a-zA-Z0-9_-]{1,128}$/.test(documentId)) {
+        res.status(400).json({ success: false, error: 'Invalid document ID format.' });
+        return;
+      }
+
+      const docRef = adminDb.collection('users').doc(userId).collection('documents').doc(documentId);
+      const docSnap = await docRef.get();
+      if (!docSnap.exists) {
+        res.status(404).json({ success: false, error: 'Document not found or unauthorized.' });
+        return;
+      }
+
+      const docData = docSnap.data() as VaultDocument;
+
+      const chunksSnap = await adminDb
+        .collection('users')
+        .doc(userId)
+        .collection('chunks')
+        .where('documentId', '==', documentId)
+        .orderBy('chunkIndex', 'asc')
+        .limit(20)
+        .get();
+
+      const chunks = chunksSnap.docs.map((d) => d.data() as VaultDocumentChunk);
+      if (chunks.length === 0) {
+        res.json({ success: true, documentId, actions: [] });
+        return;
+      }
+
+      const extracted = await extractDocumentActions(docData.filename, chunks);
+
+      const actions = extracted.map((act) => ({
+        id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        type: 'commitment',
+        title: act.title,
+        description: act.description,
+        sourceEvidence: act.sourceEvidence,
+        confidence: 0.85,
+        status: 'suggested',
+      }));
+
+      res.json({
+        success: true,
+        documentId,
+        filename: docData.filename,
+        actions,
+      });
+    } catch (err: any) {
+      console.error('[Document Extract Actions Error]:', err);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to extract document actions.',
       });
     }
   }

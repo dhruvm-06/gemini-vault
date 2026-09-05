@@ -141,6 +141,16 @@ export interface ExtractedCandidateDetailed {
 
 export type ExtractedCandidateRaw = ExtractedCandidateDetailed;
 
+export const REFLECTION_MODE_INSTRUCTIONS: Record<string, string> = {
+  reflect: 'Maintain thoughtful exploratory inquiry, listening deeply and asking poignant questions.',
+  deep_reflection: 'Explore foundational assumptions, underlying motivations, and existential patterns behind what is shared.',
+  brainstorm: 'Offer creative, divergent perspectives, lateral thinking prompts, and constructive possibilities.',
+  reframe: 'Help constructively view challenges through an empowering, objective, or alternative psychological frame.',
+  action_plan: 'Orient reflection toward structured next steps, clear milestones, and pragmatic commitments.',
+  gratitude: 'Anchor reflection in genuine appreciation, acknowledged progress, and positive emotional grounding.',
+  executive_summary: 'Distill reflections into crisp high-level takeaways, core decisions, and strategic focus areas.',
+};
+
 /**
  * Executes a conversational generation using the resilient model fallback ladder.
  * Gracefully iterates through available models if a recoverable API error occurs.
@@ -151,6 +161,7 @@ export async function generateJournalResponseWithFallback(
   styleGuidance?: {
     toneGuidance?: string;
     depthGuidance?: string;
+    modeGuidance?: string;
   }
 ): Promise<{ text: string; modelUsed: string }> {
   const ai = getGeminiClient();
@@ -168,6 +179,9 @@ export async function generateJournalResponseWithFallback(
   });
 
   let systemInstruction = JOURNAL_SYSTEM_INSTRUCTION;
+  if (styleGuidance?.modeGuidance) {
+    systemInstruction += `\n[Reflection Mode]: ${styleGuidance.modeGuidance}`;
+  }
   if (styleGuidance?.toneGuidance) {
     systemInstruction += `\n[Tone Guidance]: ${styleGuidance.toneGuidance}`;
   }
@@ -497,4 +511,496 @@ export async function synthesizeMomentNarrativeWithFallback(
     title: fallbackTitle,
     narrative: parts.join('\n\n') || 'A recorded milestone preserved in your personal vault.',
   };
+}
+
+/**
+ * Single-shot grounded summary of an active or completed reflection session.
+ */
+export async function generateSessionSummary(
+  conversationTurns: { role: string; content: string }[]
+): Promise<{ summary: string; keyTakeaways: string[]; moodObservation?: string }> {
+  const client = getGeminiClient();
+
+  const formattedTurns = conversationTurns
+    .map((t) => `${t.role === 'assistant' ? 'Companion' : 'Reflector'}: ${t.content.replace(/[<>&]/g, '')}`)
+    .join('\n\n');
+
+  const prompt = `You are the reflection synthesizer in Gemini Vault.
+Summarize the following reflection session into a grounded, warm, lucid summary.
+Never invent facts not present in the dialogue. Do not offer clinical diagnoses or psychological labels.
+
+<session_dialogue>
+${formattedTurns.slice(0, 10000)}
+</session_dialogue>
+
+Return a JSON object with:
+- "summary": A concise, thoughtful paragraph (60-120 words) summarizing the core journey.
+- "keyTakeaways": 2 to 4 bullet points representing the primary themes or conclusions.
+- "moodObservation": A calm, non-clinical one-sentence observation of the reflector's emotional tone.`;
+
+  for (const modelName of MODEL_FALLBACK_LADDER) {
+    try {
+      const response = await client.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 600,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              keyTakeaways: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+              moodObservation: { type: Type.STRING },
+            },
+            required: ['summary', 'keyTakeaways'],
+          },
+        },
+      });
+
+      const text = response.text?.trim();
+      if (text) {
+        const parsed = JSON.parse(text);
+        return {
+          summary: parsed.summary || 'A thoughtful reflection preserved in your vault.',
+          keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways : [],
+          moodObservation: parsed.moodObservation,
+        };
+      }
+    } catch (err) {
+      console.warn(`[Gemini] Session summary failed on model ${modelName}:`, err);
+    }
+  }
+
+  // Deterministic fallback if API fails
+  const firstTurn = conversationTurns.find((t) => t.role === 'user')?.content || 'Session';
+  return {
+    summary: `Reflection exploring: "${firstTurn.slice(0, 100)}..."`,
+    keyTakeaways: ['Reflected on personal priorities and current state.'],
+  };
+}
+
+/**
+ * Extracts action suggestions (commitments, calendar events, locations, email drafts) from reflection turns.
+ */
+export async function extractActionIntents(
+  conversationTurns: { id: string; role: string; content: string }[]
+): Promise<Array<{
+  type: 'commitment' | 'calendar_event' | 'location' | 'email_draft' | 'revisit' | 'achievement';
+  title: string;
+  description?: string;
+  dateTime?: string;
+  location?: string;
+  recipient?: string;
+  confidence: number;
+  sourceEvidence: string;
+  sourceMessageId?: string;
+}>> {
+  const client = getGeminiClient();
+
+  const userTurns = conversationTurns
+    .filter((t) => t.role === 'user')
+    .map((t) => `[turn_id: ${t.id}] ${t.content.replace(/[<>&]/g, '')}`)
+    .join('\n\n');
+
+  if (!userTurns.trim()) return [];
+
+  const prompt = `You are the action extraction engine of Gemini Vault.
+Analyze the reflector's thoughts and extract actionable suggestions.
+Allowed types: "commitment", "calendar_event", "location", "email_draft", "revisit", "achievement".
+
+Rules:
+1. ONLY extract clear, explicit intentions, commitments, or plans stated by the reflector.
+2. Hypothetical, vague, or casual musings ("maybe someday", "perhaps", "might") must NOT become commitments.
+3. For calendar_event or location, identify specific places or timeframes if mentioned.
+4. For email_draft, identify intended recipients or topics.
+5. Provide the exact sourceEvidence quote from the turn.
+6. Maximum 4 suggestions. Return [] if none.
+
+<reflector_statements>
+${userTurns.slice(0, 8000)}
+</reflector_statements>`;
+
+  for (const modelName of MODEL_FALLBACK_LADDER) {
+    try {
+      const response = await client.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 800,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: {
+                  type: Type.STRING,
+                  enum: ['commitment', 'calendar_event', 'location', 'email_draft', 'revisit', 'achievement'],
+                },
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                dateTime: { type: Type.STRING },
+                location: { type: Type.STRING },
+                recipient: { type: Type.STRING },
+                confidence: { type: Type.NUMBER },
+                sourceEvidence: { type: Type.STRING },
+                sourceMessageId: { type: Type.STRING },
+              },
+              required: ['type', 'title', 'confidence', 'sourceEvidence'],
+            },
+          },
+        },
+      });
+
+      const text = response.text?.trim();
+      if (text) {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          return parsed.map((item: any) => ({
+            type: item.type,
+            title: String(item.title).slice(0, 150),
+            description: item.description ? String(item.description).slice(0, 300) : undefined,
+            dateTime: item.dateTime ? String(item.dateTime) : undefined,
+            location: item.location ? String(item.location).slice(0, 150) : undefined,
+            recipient: item.recipient ? String(item.recipient).slice(0, 150) : undefined,
+            confidence: typeof item.confidence === 'number' ? Math.min(1, Math.max(0, item.confidence)) : 0.8,
+            sourceEvidence: String(item.sourceEvidence).slice(0, 300),
+            sourceMessageId: item.sourceMessageId ? String(item.sourceMessageId) : undefined,
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn(`[Gemini] Action intent extraction failed on model ${modelName}:`, err);
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Generates a structured Weekly Vault Review aggregating longitudinal reflections, memories, and loops.
+ * Clearly separates EVIDENCE vs INTERPRETATION vs SUGGESTION.
+ */
+export async function generateWeeklyVaultReview(data: {
+  sessions: Array<{ id: string; title: string; clientStartedAt?: string }>;
+  memories: Array<{ id: string; fact: string; category: string; loopStatus?: string }>;
+  moments: Array<{ id: string; title: string; narrative: string }>;
+  daysWindow: number;
+}): Promise<{
+  overview: string;
+  whatMovedForward: Array<{ item: string; evidence: string }>;
+  wins: Array<{ item: string; evidence: string }>;
+  openLoops: Array<{ item: string; evidence: string }>;
+  recurringThemes: Array<{ item: string; evidence: string }>;
+  whatChanged: Array<{ item: string; evidence: string }>;
+  growthAndPerspectiveShifts: Array<{ item: string; evidence: string }>;
+  nextWeekFocus: Array<{ item: string; suggestion: string }>;
+  suggestedActions: Array<{ action: string; type: string }>;
+}> {
+  const client = getGeminiClient();
+
+  const sessionsText = data.sessions
+    .map((s) => `- Reflection: "${s.title}" (${s.clientStartedAt || 'recent'})`)
+    .join('\n');
+
+  const memoriesText = data.memories
+    .map((m) => `- [${m.category}] "${m.fact}" ${m.loopStatus ? `[status: ${m.loopStatus}]` : ''}`)
+    .join('\n');
+
+  const momentsText = data.moments
+    .map((m) => `- Milestone Moment: "${m.title}" — ${m.narrative.slice(0, 150)}`)
+    .join('\n');
+
+  const prompt = `You are the longitudinal review synthesizer for Gemini Vault.
+Synthesize a structured Weekly Vault Review over a ${data.daysWindow}-day window based strictly on the user's authentic records below.
+
+Rules:
+1. Strict Grounding: Ground every observation in the provided data. Never fabricate achievements, dates, or progress.
+2. Clearly distinguish EVIDENCE (facts from the vault) from INTERPRETATION and SUGGESTION.
+3. No clinical or psychological diagnoses.
+4. Keep the tone calm, editorial, encouraging, and lucid.
+
+<vault_records>
+<reflections>
+${sessionsText || 'None recorded in this window.'}
+</reflections>
+<memories>
+${memoriesText || 'None recorded in this window.'}
+</memories>
+<moments>
+${momentsText || 'None recorded in this window.'}
+</moments>
+</vault_records>`;
+
+  for (const modelName of MODEL_FALLBACK_LADDER) {
+    try {
+      const response = await client.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 1200,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              overview: { type: Type.STRING },
+              whatMovedForward: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    item: { type: Type.STRING },
+                    evidence: { type: Type.STRING },
+                  },
+                  required: ['item', 'evidence'],
+                },
+              },
+              wins: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    item: { type: Type.STRING },
+                    evidence: { type: Type.STRING },
+                  },
+                  required: ['item', 'evidence'],
+                },
+              },
+              openLoops: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    item: { type: Type.STRING },
+                    evidence: { type: Type.STRING },
+                  },
+                  required: ['item', 'evidence'],
+                },
+              },
+              recurringThemes: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    item: { type: Type.STRING },
+                    evidence: { type: Type.STRING },
+                  },
+                  required: ['item', 'evidence'],
+                },
+              },
+              whatChanged: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    item: { type: Type.STRING },
+                    evidence: { type: Type.STRING },
+                  },
+                  required: ['item', 'evidence'],
+                },
+              },
+              growthAndPerspectiveShifts: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    item: { type: Type.STRING },
+                    evidence: { type: Type.STRING },
+                  },
+                  required: ['item', 'evidence'],
+                },
+              },
+              nextWeekFocus: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    item: { type: Type.STRING },
+                    suggestion: { type: Type.STRING },
+                  },
+                  required: ['item', 'suggestion'],
+                },
+              },
+              suggestedActions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    action: { type: Type.STRING },
+                    type: { type: Type.STRING },
+                  },
+                  required: ['action', 'type'],
+                },
+              },
+            },
+            required: [
+              'overview',
+              'whatMovedForward',
+              'wins',
+              'openLoops',
+              'recurringThemes',
+              'whatChanged',
+              'growthAndPerspectiveShifts',
+              'nextWeekFocus',
+              'suggestedActions',
+            ],
+          },
+        },
+      });
+
+      const text = response.text?.trim();
+      if (text) {
+        return JSON.parse(text);
+      }
+    } catch (err) {
+      console.warn(`[Gemini] Weekly review synthesis failed on model ${modelName}:`, err);
+    }
+  }
+
+  // Deterministic fallback
+  return {
+    overview: `Weekly synthesis across ${data.sessions.length} reflections and ${data.memories.length} memories.`,
+    whatMovedForward: data.memories.slice(0, 2).map((m) => ({ item: m.fact, evidence: `Recorded memory [${m.category}]` })),
+    wins: data.moments.slice(0, 2).map((m) => ({ item: m.title, evidence: m.narrative.slice(0, 80) })),
+    openLoops: data.memories.filter((m) => m.loopStatus === 'open').slice(0, 3).map((m) => ({ item: m.fact, evidence: 'Open loop in vault' })),
+    recurringThemes: [{ item: 'Self-reflection and continuous alignment', evidence: `${data.sessions.length} sessions logged` }],
+    whatChanged: [{ item: 'Ongoing integration of vault memories', evidence: 'Vault context growth' }],
+    growthAndPerspectiveShifts: [{ item: 'Dedicated space for mindful processing', evidence: 'Active journaling practice' }],
+    nextWeekFocus: [{ item: 'Address top open loops', suggestion: 'Schedule a focus block for active commitments.' }],
+    suggestedActions: [{ action: 'Review snoozed loops in Calendar', type: 'commitment' }],
+  };
+}
+
+/**
+ * Summarizes an uploaded document from its indexed chunks.
+ */
+export async function generateDocumentSummary(
+  documentTitle: string,
+  chunks: Array<{ text: string; pageNumber?: number | null; chunkIndex: number }>
+): Promise<{ summary: string; keyTakeaways: string[] }> {
+  const client = getGeminiClient();
+
+  const excerptText = chunks
+    .slice(0, 12)
+    .map((c, i) => `[Excerpt ${i + 1}${c.pageNumber ? `, page ${c.pageNumber}` : ''}]: ${c.text.replace(/[<>&]/g, '')}`)
+    .join('\n\n');
+
+  const prompt = `You are the document intelligence engine in Gemini Vault.
+Summarize the document "${documentTitle}" based strictly on the excerpts below.
+Do not hallucinate external details.
+
+<document_excerpts>
+${excerptText.slice(0, 10000)}
+</document_excerpts>
+
+Return a JSON object with:
+- "summary": A well-structured summary paragraph (80-150 words).
+- "keyTakeaways": 3 to 5 key bullet points.`;
+
+  for (const modelName of MODEL_FALLBACK_LADDER) {
+    try {
+      const response = await client.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 600,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              keyTakeaways: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+            },
+            required: ['summary', 'keyTakeaways'],
+          },
+        },
+      });
+
+      const text = response.text?.trim();
+      if (text) {
+        return JSON.parse(text);
+      }
+    } catch (err) {
+      console.warn(`[Gemini] Document summary failed on model ${modelName}:`, err);
+    }
+  }
+
+  return {
+    summary: `Document "${documentTitle}" contains ${chunks.length} indexed chunks ready for grounded queries.`,
+    keyTakeaways: ['Document indexed and available for verified search.'],
+  };
+}
+
+/**
+ * Extracts actionable items from an uploaded document.
+ */
+export async function extractDocumentActions(
+  documentTitle: string,
+  chunks: Array<{ text: string; pageNumber?: number | null; chunkIndex: number }>
+): Promise<Array<{
+  title: string;
+  description: string;
+  type: string;
+  sourceEvidence: string;
+}>> {
+  const client = getGeminiClient();
+
+  const excerptText = chunks
+    .slice(0, 10)
+    .map((c, i) => `[Excerpt ${i + 1}]: ${c.text.replace(/[<>&]/g, '')}`)
+    .join('\n\n');
+
+  const prompt = `Analyze document "${documentTitle}" and extract up to 4 key action items or next steps mentioned in the text.
+Return [] if no clear action items are present.
+
+<document_excerpts>
+${excerptText.slice(0, 8000)}
+</document_excerpts>`;
+
+  for (const modelName of MODEL_FALLBACK_LADDER) {
+    try {
+      const response = await client.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 600,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                type: { type: Type.STRING },
+                sourceEvidence: { type: Type.STRING },
+              },
+              required: ['title', 'description', 'type', 'sourceEvidence'],
+            },
+          },
+        },
+      });
+
+      const text = response.text?.trim();
+      if (text) {
+        return JSON.parse(text);
+      }
+    } catch (err) {
+      console.warn(`[Gemini] Document action extraction failed on model ${modelName}:`, err);
+    }
+  }
+
+  return [];
 }

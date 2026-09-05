@@ -21,7 +21,9 @@ import {
   DocumentCitation,
   DocumentQueryResponse,
 } from '../types/documents';
+import { ActionSuggestion } from '../types';
 import { FormattedResponse } from './FormattedResponse';
+import { ActionConfirmationCard } from './ActionConfirmationCard';
 
 interface DocumentsStudioProps {
   onNavigate?: (view: any) => void;
@@ -50,6 +52,79 @@ export const DocumentsStudio: React.FC<DocumentsStudioProps> = () => {
   // Evidence Drawer state
   const [showEvidence, setShowEvidence] = useState<boolean>(false);
   const [activeCitation, setActiveCitation] = useState<DocumentCitation | null>(null);
+
+  // Document synthesis & action extraction state
+  const [docSummary, setDocSummary] = useState<{
+    docId: string;
+    summary: string;
+    takeaways: string[];
+  } | null>(null);
+  const [isSummarizingDoc, setIsSummarizingDoc] = useState(false);
+  const [docSummaryError, setDocSummaryError] = useState<string | null>(null);
+
+  const [docActions, setDocActions] = useState<{
+    docId: string;
+    actions: ActionSuggestion[];
+  } | null>(null);
+  const [isExtractingDocActions, setIsExtractingDocActions] = useState(false);
+  const [docActionsError, setDocActionsError] = useState<string | null>(null);
+
+  const handleSummarizeDoc = async (id: string) => {
+    if (isSummarizingDoc) return;
+    setIsSummarizingDoc(true);
+    setDocSummaryError(null);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error('Authentication required.');
+      const res = await fetch(`/api/documents/${id}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Unable to summarize document.');
+      setDocSummary({
+        docId: id,
+        summary: data.summary,
+        takeaways: data.takeaways || [],
+      });
+    } catch (err: unknown) {
+      console.error('[DocumentsStudio] Summarize error:', err);
+      setDocSummaryError(err instanceof Error ? err.message : 'Failed to summarize document.');
+    } finally {
+      setIsSummarizingDoc(false);
+    }
+  };
+
+  const handleExtractDocActions = async (id: string) => {
+    if (isExtractingDocActions) return;
+    setIsExtractingDocActions(true);
+    setDocActionsError(null);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error('Authentication required.');
+      const res = await fetch(`/api/documents/${id}/extract-actions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Unable to extract document actions.');
+      setDocActions({
+        docId: id,
+        actions: data.actions || [],
+      });
+    } catch (err: unknown) {
+      console.error('[DocumentsStudio] Extract actions error:', err);
+      setDocActionsError(err instanceof Error ? err.message : 'Failed to extract actions.');
+    } finally {
+      setIsExtractingDocActions(false);
+    }
+  };
 
   // Load documents
   const fetchDocuments = async () => {
@@ -371,6 +446,35 @@ export const DocumentsStudio: React.FC<DocumentsStudioProps> = () => {
                         {doc.errorMessage}
                       </p>
                     )}
+
+                    {isReady && isSelected && (
+                      <div className="mt-3 pt-2.5 border-t border-[var(--gv-border-subtle)] flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSummarizeDoc(doc.id);
+                          }}
+                          disabled={isSummarizingDoc}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] text-[11px] text-[var(--gv-text-primary)] hover:border-[var(--gv-accent-gold)] transition disabled:opacity-50 cursor-pointer"
+                        >
+                          <Sparkles className="w-3 h-3 text-[var(--gv-accent-gold)]" />
+                          <span>{isSummarizingDoc && docSummary?.docId === doc.id ? 'Summarizing...' : 'Summarize'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExtractDocActions(doc.id);
+                          }}
+                          disabled={isExtractingDocActions}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] text-[11px] text-[var(--gv-text-primary)] hover:border-[var(--gv-accent)] transition disabled:opacity-50 cursor-pointer"
+                        >
+                          <FileText className="w-3 h-3 text-[var(--gv-accent)]" />
+                          <span>{isExtractingDocActions && docActions?.docId === doc.id ? 'Extracting...' : 'Extract Actions'}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -380,6 +484,110 @@ export const DocumentsStudio: React.FC<DocumentsStudioProps> = () => {
 
         {/* Right Column: Query & Grounded Synthesis */}
         <div className="md:col-span-2 space-y-6">
+          {/* Document Summary Card */}
+          {docSummary && (
+            <div className="p-5 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-accent-border)] shadow-xs animate-turn-enter space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-medium text-[var(--gv-accent)]">
+                  <Sparkles className="w-4 h-4 text-[var(--gv-accent-gold)]" />
+                  <span className="font-serif text-sm font-medium">Document Synthesis</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDocSummary(null)}
+                  className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+                  aria-label="Dismiss document summary"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="font-serif text-sm text-[var(--gv-text-primary)] leading-relaxed">
+                {docSummary.summary}
+              </p>
+              {docSummary.takeaways.length > 0 && (
+                <div className="pt-2 border-t border-[var(--gv-border-subtle)]">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--gv-text-tertiary)]">
+                    Key Takeaways
+                  </span>
+                  <ul className="mt-1.5 space-y-1 text-xs text-[var(--gv-text-secondary)]">
+                    {docSummary.takeaways.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-[var(--gv-accent)] font-semibold mt-0.5">•</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {docSummaryError && (
+            <div className="p-3 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] text-xs text-[var(--gv-text-secondary)] flex items-center justify-between">
+              <span>{docSummaryError}</span>
+              <button
+                type="button"
+                onClick={() => setDocSummaryError(null)}
+                className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] ml-2"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Document Extracted Actions Card */}
+          {docActions && (
+            <div className="p-5 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] shadow-xs animate-turn-enter space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--gv-accent)] flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+                  Extracted Document Actions ({docActions.actions.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDocActions(null)}
+                  className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+                  aria-label="Dismiss extracted actions"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {docActions.actions.length === 0 ? (
+                <p className="text-xs text-[var(--gv-text-tertiary)] italic">
+                  No actionable commitments detected in this document.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {docActions.actions.map((act) => (
+                    <ActionConfirmationCard
+                      key={act.id}
+                      action={act}
+                      onConfirmCommitment={() => {}}
+                      onDismiss={(id) => {
+                        setDocActions((prev) =>
+                          prev ? { ...prev, actions: prev.actions.filter((a) => a.id !== id) } : null
+                        );
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {docActionsError && (
+            <div className="p-3 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] text-xs text-[var(--gv-text-secondary)] flex items-center justify-between">
+              <span>{docActionsError}</span>
+              <button
+                type="button"
+                onClick={() => setDocActionsError(null)}
+                className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] ml-2"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* Query Form */}
           <div className="p-5 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] shadow-xs">
             <form onSubmit={handleQuery}>

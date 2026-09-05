@@ -4,7 +4,14 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '../firebaseAdmin';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
 import { chatRateLimiter } from '../middleware/rateLimit';
-import { generateJournalResponseWithFallback, ConversationTurn } from '../gemini';
+import {
+  generateJournalResponseWithFallback,
+  generateSessionSummary,
+  extractActionIntents,
+  REFLECTION_MODE_INSTRUCTIONS,
+  ConversationTurn,
+} from '../gemini';
+import { detectActionSuggestions } from '../../src/utils/actionHandoffs';
 
 const router = Router();
 
@@ -40,6 +47,15 @@ const chatRequestSchema = z.object({
   clientMessageId: z.string().regex(SAFE_ID_REGEX, 'Invalid clientMessageId format').max(128).optional(),
   conversationTone: z.enum(['empathic', 'direct', 'philosophical']).optional(),
   reflectionDepth: z.enum(['concise', 'balanced', 'deep']).optional(),
+  reflectionMode: z.enum([
+    'reflect',
+    'deep_reflection',
+    'brainstorm',
+    'reframe',
+    'action_plan',
+    'gratitude',
+    'executive_summary',
+  ]).optional(),
   locationContext: locationContextSchema.optional().nullable(),
 });
 
@@ -82,6 +98,7 @@ router.post('/chat', requireAuth, chatRateLimiter, async (req: AuthenticatedRequ
       clientMessageId,
       conversationTone,
       reflectionDepth,
+      reflectionMode,
       locationContext,
     } = parseResult.data;
     const userId = req.user?.uid;
@@ -174,9 +191,11 @@ router.post('/chat', requireAuth, chatRateLimiter, async (req: AuthenticatedRequ
     try {
       const toneGuidance = conversationTone ? TONE_INSTRUCTIONS[conversationTone] : undefined;
       const depthGuidance = reflectionDepth ? DEPTH_INSTRUCTIONS[reflectionDepth] : undefined;
+      const modeGuidance = reflectionMode ? REFLECTION_MODE_INSTRUCTIONS[reflectionMode] : undefined;
       const geminiResult = await generateJournalResponseWithFallback(history, message.trim(), {
         toneGuidance,
         depthGuidance,
+        modeGuidance,
       });
       aiResponseText = geminiResult.text;
     } catch (geminiError: unknown) {
@@ -581,6 +600,136 @@ router.post('/session/:sessionId/conclude', requireAuth, async (req: Authenticat
   } catch (error: unknown) {
     console.error('[Journal Route] Error concluding session:', error);
     res.status(500).json({ error: 'Internal Server Error', message: 'Failed to conclude session.' });
+  }
+});
+
+/**
+ * POST /api/journal/session/:sessionId/summarize
+ * Grounded on-demand summary of an active or completed reflection session.
+ */
+router.post('/session/:sessionId/summarize', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    const sessionId = Array.isArray(req.params.sessionId) ? req.params.sessionId[0] : req.params.sessionId;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!sessionId || !SAFE_ID_REGEX.test(sessionId)) {
+      res.status(400).json({ error: 'Bad Request', message: 'Invalid sessionId format.' });
+      return;
+    }
+
+    const sessionRef = adminDb.collection('users').doc(userId).collection('sessions').doc(sessionId);
+    const sessionDoc = await sessionRef.get();
+    if (!sessionDoc.exists) {
+      res.status(404).json({ error: 'Not Found', message: 'Session not found or unauthorized.' });
+      return;
+    }
+
+    const messagesSnap = await sessionRef.collection('messages').orderBy('timestamp', 'asc').get();
+    const turns: Array<{ role: string; content: string }> = [];
+    messagesSnap.forEach((doc) => {
+      const d = doc.data();
+      if (d && d.content && (d.role === 'user' || d.role === 'assistant')) {
+        turns.push({ role: d.role, content: d.content });
+      }
+    });
+
+    if (turns.length === 0) {
+      res.status(400).json({ error: 'Bad Request', message: 'Session has no messages to summarize.' });
+      return;
+    }
+
+    const summaryResult = await generateSessionSummary(turns);
+
+    res.json({
+      success: true,
+      sessionId,
+      summary: summaryResult.summary,
+      keyTakeaways: summaryResult.keyTakeaways,
+      moodObservation: summaryResult.moodObservation,
+    });
+  } catch (error: unknown) {
+    console.error('[Journal Route] Error generating session summary:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: 'Failed to generate session summary.' });
+  }
+});
+
+/**
+ * POST /api/journal/session/:sessionId/extract-actions
+ * Contextual action extraction for a reflection session.
+ */
+router.post('/session/:sessionId/extract-actions', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    const sessionId = Array.isArray(req.params.sessionId) ? req.params.sessionId[0] : req.params.sessionId;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!sessionId || !SAFE_ID_REGEX.test(sessionId)) {
+      res.status(400).json({ error: 'Bad Request', message: 'Invalid sessionId format.' });
+      return;
+    }
+
+    const sessionRef = adminDb.collection('users').doc(userId).collection('sessions').doc(sessionId);
+    const sessionDoc = await sessionRef.get();
+    if (!sessionDoc.exists) {
+      res.status(404).json({ error: 'Not Found', message: 'Session not found or unauthorized.' });
+      return;
+    }
+
+    const messagesSnap = await sessionRef.collection('messages').orderBy('timestamp', 'asc').get();
+    const turns: Array<{ id: string; role: string; content: string }> = [];
+    messagesSnap.forEach((doc) => {
+      const d = doc.data();
+      if (d && d.content && (d.role === 'user' || d.role === 'assistant')) {
+        turns.push({ id: doc.id, role: d.role, content: d.content });
+      }
+    });
+
+    if (turns.length === 0) {
+      res.json({ success: true, sessionId, actions: [] });
+      return;
+    }
+
+    // Combine deterministic extraction with Gemini extraction for high recall and precision
+    const deterministicActions: any[] = [];
+    for (const turn of turns) {
+      if (turn.role === 'user') {
+        const detected = detectActionSuggestions(turn.content, { sessionId, messageId: turn.id });
+        deterministicActions.push(...detected);
+      }
+    }
+
+    const geminiActions = await extractActionIntents(turns);
+
+    // Merge and deduplicate actions by title similarity
+    const actionMap = new Map<string, any>();
+    for (const act of [...deterministicActions, ...geminiActions]) {
+      const key = `${act.type}_${act.title.toLowerCase().trim().slice(0, 30)}`;
+      if (!actionMap.has(key)) {
+        actionMap.set(key, {
+          ...act,
+          sourceSessionId: sessionId,
+          id: act.id || `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      sessionId,
+      actions: Array.from(actionMap.values()),
+    });
+  } catch (error: unknown) {
+    console.error('[Journal Route] Error extracting session actions:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: 'Failed to extract actions.' });
   }
 });
 

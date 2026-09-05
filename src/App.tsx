@@ -12,6 +12,7 @@ import { CommitmentsCalendarView } from './components/CommitmentsCalendarView';
 import { AppShell } from './components/AppShell';
 import { LandingPage } from './components/LandingPage';
 import { AppView, ContextRailItem } from './types';
+import { targetToView } from './utils/actionHandoffs';
 import { VaultPresence } from './components/VaultPresence';
 
 const VALID_VIEWS: AppView[] = ['home', 'voice', 'vault', 'intelligence', 'documents', 'calendar', 'moments'];
@@ -66,6 +67,20 @@ export default function App() {
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  useEffect(() => {
+    const handleGvNavigate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ target: string }>;
+      if (customEvent.detail?.target) {
+        const targetInfo = targetToView(customEvent.detail.target);
+        if (targetInfo) {
+          navigate(targetInfo.view);
+        }
+      }
+    };
+    window.addEventListener('gv-navigate', handleGvNavigate);
+    return () => window.removeEventListener('gv-navigate', handleGvNavigate);
   }, []);
 
   const navigate = (nextView: AppView) => {

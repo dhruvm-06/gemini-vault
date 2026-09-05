@@ -5,7 +5,14 @@ import { Type } from '@google/genai';
 import { adminDb } from '../firebaseAdmin';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
 import { extractRateLimiter, askRateLimiter, signalsRateLimiter } from '../middleware/rateLimit';
-import { extractMemoriesWithFallback, ConversationTurn, ConversationTurnDetailed, ExistingMemorySummary, getGeminiClient } from '../gemini';
+import {
+  extractMemoriesWithFallback,
+  generateWeeklyVaultReview,
+  ConversationTurn,
+  ConversationTurnDetailed,
+  ExistingMemorySummary,
+  getGeminiClient,
+} from '../gemini';
 import { normalizeVaultMemory, executeAskMyVault } from '../askVaultEngine';
 
 const router = Router();
@@ -1517,6 +1524,141 @@ router.delete('/:memoryId', requireAuth, async (req: AuthenticatedRequest, res: 
       error: 'Internal Server Error',
       message: 'Failed to delete memory.',
     });
+  }
+});
+
+/**
+ * POST /api/memories/weekly-review
+ * Grounded synthesis of longitudinal Weekly Vault Review.
+ * Uses actual completed reflections, memories, open/snoozed loops, and moments.
+ */
+router.post('/weekly-review', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const days = typeof req.body?.days === 'number' && req.body.days > 0 && req.body.days <= 90 ? req.body.days : 7;
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Fetch user reflections, memories, and moments in parallel (strictly UID scoped)
+    const [sessionsSnap, memoriesSnap, momentsSnap] = await Promise.all([
+      adminDb.collection('users').doc(userId).collection('sessions').orderBy('createdAt', 'desc').limit(50).get(),
+      adminDb.collection('users').doc(userId).collection('memories').where('isActive', '!=', false).limit(100).get(),
+      adminDb.collection('users').doc(userId).collection('moments').limit(20).get(),
+    ]);
+
+    const sessions: Array<{ id: string; title: string; clientStartedAt?: string }> = [];
+    sessionsSnap.forEach((doc) => {
+      const d = doc.data();
+      const createdAt = d.createdAt?.toDate ? d.createdAt.toDate() : new Date(d.clientStartedAt || 0);
+      if (createdAt >= cutoff || sessions.length < 5) {
+        sessions.push({
+          id: doc.id,
+          title: d.title || 'Reflection',
+          clientStartedAt: d.clientStartedAt,
+        });
+      }
+    });
+
+    const memories: Array<{ id: string; fact: string; category: string; loopStatus?: string }> = [];
+    memoriesSnap.forEach((doc) => {
+      const d = doc.data();
+      memories.push({
+        id: doc.id,
+        fact: d.fact,
+        category: d.category,
+        loopStatus: d.loopStatus,
+      });
+    });
+
+    const moments: Array<{ id: string; title: string; narrative: string }> = [];
+    momentsSnap.forEach((doc) => {
+      const d = doc.data();
+      moments.push({
+        id: doc.id,
+        title: d.title || 'Milestone',
+        narrative: d.narrative || '',
+      });
+    });
+
+    const review = await generateWeeklyVaultReview({
+      sessions,
+      memories,
+      moments,
+      daysWindow: days,
+    });
+
+    res.json({
+      success: true,
+      review,
+      sourceCounts: {
+        sessionsCount: sessions.length,
+        memoriesCount: memories.length,
+        momentsCount: moments.length,
+      },
+    });
+  } catch (error: unknown) {
+    console.error('[Memories Route] Error generating weekly review:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to generate weekly review.',
+    });
+  }
+});
+
+/**
+ * POST /api/memories/calendar-summary
+ * Summarizes the week's active commitments, completed loops, and upcoming schedule.
+ */
+router.post('/calendar-summary', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const memoriesSnap = await adminDb
+      .collection('users')
+      .doc(userId)
+      .collection('memories')
+      .where('isActive', '!=', false)
+      .get();
+
+    const activeCommitments: string[] = [];
+    const snoozedLoops: string[] = [];
+    const resolvedLoops: string[] = [];
+
+    memoriesSnap.forEach((doc) => {
+      const d = doc.data();
+      if (d.loopStatus === 'resolved') {
+        resolvedLoops.push(d.fact);
+      } else if (d.loopStatus === 'snoozed') {
+        snoozedLoops.push(`${d.fact}${d.snoozedUntil ? ` (waking: ${d.snoozedUntil})` : ''}`);
+      } else if (d.category === 'commitment' || d.category === 'goal' || d.loopStatus === 'open') {
+        activeCommitments.push(d.fact);
+      }
+    });
+
+    const summary = {
+      activeCommitmentsCount: activeCommitments.length,
+      snoozedLoopsCount: snoozedLoops.length,
+      resolvedLoopsCount: resolvedLoops.length,
+      topCommitments: activeCommitments.slice(0, 5),
+      upcomingSnoozed: snoozedLoops.slice(0, 3),
+      recentAchievements: resolvedLoops.slice(0, 5),
+      focusRecommendation: activeCommitments[0]
+        ? `Primary focus recommendation: "${activeCommitments[0]}"`
+        : 'No urgent commitments pending. Take space to reflect or explore new goals.',
+    };
+
+    res.json({ success: true, summary });
+  } catch (error: unknown) {
+    console.error('[Memories Route] Error generating calendar summary:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: 'Failed to generate calendar summary.' });
   }
 });
 

@@ -11,6 +11,8 @@ import {
   MODEL_FALLBACK_LADDER,
 } from '../gemini';
 import { SAFE_ID_REGEX } from './journal';
+import { detectActionSuggestions, isValidNavigationTarget } from '../../src/utils/actionHandoffs';
+import { GlobalAppContext } from '../../src/types';
 
 // Active voice connections map: userId -> WebSocket
 const activeConnections = new Map<string, WebSocket>();
@@ -38,6 +40,7 @@ interface SocketContext {
   userId?: string;
   isAuthenticated: boolean;
   liveSession?: any;
+  contextManifest?: GlobalAppContext;
   currentAssistantTurnId?: string;
   accumulatedAssistantText: string;
   accumulatedUserText: string;
@@ -308,6 +311,9 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
 
           const uid = decodedToken.uid;
           ctx.userId = uid;
+          if (msg.contextManifest && typeof msg.contextManifest === 'object') {
+            ctx.contextManifest = msg.contextManifest;
+          }
 
           // Rate limit check
           if (isRateLimited(uid)) {
@@ -394,6 +400,18 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
             contextPreamble = `\n\nRecent context from this ongoing reflection session:\n<session_history>\n${formattedHistory}\n</session_history>\nContinue the reflection naturally from this point.`;
           }
 
+          if (ctx.contextManifest) {
+            const view = ctx.contextManifest.currentView || 'home';
+            const resource = ctx.contextManifest.currentResource?.title
+              ? `currently viewing ${ctx.contextManifest.currentResource.type} "${ctx.contextManifest.currentResource.title}"`
+              : `currently on ${view} workspace`;
+            const vault = ctx.contextManifest.vaultSummary
+              ? `Vault overview: ${ctx.contextManifest.vaultSummary.openLoopsCount} open loops, ${ctx.contextManifest.vaultSummary.snoozedLoopsCount} snoozed loops, ${ctx.contextManifest.vaultSummary.activeCommitmentsCount} active commitments.`
+              : '';
+
+            contextPreamble += `\n\n<global_app_context>\nReflector Location: ${resource}.\n${vault}\nAvailable Navigation Destinations: reflect, voice, vault, moments, intelligence, documents, calendar, settings.\nIf the reflector asks to navigate to one of these areas (e.g. "take me to calendar", "go to vault", "open documents", "open settings"), speak a concise acknowledgement (e.g. "Taking you to your commitments now.").\n</global_app_context>`;
+          }
+
           const fullSystemInstruction = `${JOURNAL_SYSTEM_INSTRUCTION}${contextPreamble}`;
 
           // Connect to Gemini Live API via server-side Gemini client
@@ -476,6 +494,42 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
 
                       // Trigger asynchronous automatic session titling
                       triggerAutoTitling(ctx, sessionRef);
+
+                      // Navigation Intent Detection
+                      const navMatch = userText.match(
+                        /(?:take me to|go to|open|show|navigate to|switch to)\s+(calendar|commitments|vault|memories|documents?|files?|intelligence|signals?|moments?|settings|profile|reflections?|home)/i
+                      );
+                      if (navMatch && navMatch[1]) {
+                        const rawTarget = navMatch[1].toLowerCase();
+                        let normalizedTarget: string | null = null;
+                        if (rawTarget.includes('cal') || rawTarget.includes('commit')) normalizedTarget = 'calendar';
+                        else if (rawTarget.includes('vault') || rawTarget.includes('memor')) normalizedTarget = 'vault';
+                        else if (rawTarget.includes('doc') || rawTarget.includes('file')) normalizedTarget = 'documents';
+                        else if (rawTarget.includes('intel') || rawTarget.includes('signal')) normalizedTarget = 'intelligence';
+                        else if (rawTarget.includes('moment')) normalizedTarget = 'moments';
+                        else if (rawTarget.includes('set') || rawTarget.includes('prof')) normalizedTarget = 'settings';
+                        else if (rawTarget.includes('reflec') || rawTarget.includes('home')) normalizedTarget = 'reflect';
+
+                        if (normalizedTarget && isValidNavigationTarget(normalizedTarget)) {
+                          console.log(`[Voice Live] Emitting navigation intent for target: ${normalizedTarget}`);
+                          sendToClient(ws, {
+                            type: 'navigation_intent',
+                            target: normalizedTarget,
+                          });
+                        }
+                      }
+
+                      // Action Suggestion Detection
+                      const detectedActions = detectActionSuggestions(userText, {
+                        sessionId: ctx.sessionId,
+                        messageId: userMsgId,
+                      });
+                      for (const action of detectedActions) {
+                        sendToClient(ws, {
+                          type: 'action_suggestion',
+                          action,
+                        });
+                      }
                     };
 
                     // 1. Live interim user transcription preview (ephemeral UI state)
@@ -716,6 +770,13 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                 } catch {
                   ws.close(4401, 'Expired Token');
                 }
+              }
+              break;
+            }
+
+            case 'context_update': {
+              if (msg.contextManifest && typeof msg.contextManifest === 'object') {
+                ctx.contextManifest = msg.contextManifest;
               }
               break;
             }

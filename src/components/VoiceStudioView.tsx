@@ -9,9 +9,11 @@ import {
   Sparkles,
   RotateCcw,
 } from 'lucide-react';
-import { JournalMessage } from '../types';
+import { JournalMessage, ActionSuggestion } from '../types';
 import { VaultPresence } from './VaultPresence';
 import { useVoiceSession } from '../hooks/useVoiceSession';
+import { buildAppContextManifest } from '../utils/actionHandoffs';
+import { ActionConfirmationCard } from './ActionConfirmationCard';
 
 interface VoiceStudioViewProps {
   sessionId: string;
@@ -58,6 +60,17 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
     [onSessionTitled]
   );
 
+  const contextManifest = React.useMemo(() => {
+    return buildAppContextManifest({
+      currentView: 'voice',
+      currentResource: {
+        type: 'reflection',
+        id: sessionId,
+        title: currentTitle,
+      },
+    });
+  }, [sessionId, currentTitle]);
+
   const {
     status,
     presenceState,
@@ -67,6 +80,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
     isMuted,
     error,
     durationSeconds,
+    actionSuggestions,
     start,
     stop,
     toggleMute,
@@ -74,6 +88,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
   } = useVoiceSession({
     sessionId,
     getIdToken,
+    contextManifest,
     onTurnPersisted,
     onInterrupted,
     onConcluded: handleConcluded,
@@ -252,6 +267,24 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Real-time Voice Detected Actions */}
+        {actionSuggestions && actionSuggestions.length > 0 && (
+          <div className="w-full max-h-[16vh] overflow-y-auto space-y-2 shrink-0 mt-3 animate-turn-enter">
+            <span className="text-[11px] font-medium text-[var(--gv-accent)] flex items-center gap-1.5 px-1">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+              <span>Voice Action Intent Detected</span>
+            </span>
+            {actionSuggestions.map((act: ActionSuggestion) => (
+              <ActionConfirmationCard
+                key={act.id}
+                action={act}
+                onConfirmCommitment={() => {}}
+                onDismiss={() => {}}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Rolling Live Transcript Stream (Editorial Layout bounded to 28vh) */}
         <div

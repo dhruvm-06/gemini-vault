@@ -8,7 +8,7 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "lint": "tsc --noEmit",
-    "test": "tsx tests/voiceSessionLifecycle.test.ts && tsx --test tests/askVaultIntelligence.test.ts && tsx --test tests/documentIntelligence.test.ts && tsx --test tests/finalProductEnhancements.test.ts && tsx --test tests/exportAndPalette.test.ts"
+    "test": "tsx tests/voiceSessionLifecycle.test.ts && tsx --test tests/askVaultIntelligence.test.ts && tsx --test tests/documentIntelligence.test.ts && tsx --test tests/finalProductEnhancements.test.ts && tsx --test tests/exportAndPalette.test.ts && tsx --test tests/vaultIntelligenceFinal.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

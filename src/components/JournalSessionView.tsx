@@ -18,11 +18,13 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { JournalSession, JournalMessage, ContextRailItem, LocationContext } from '../types';
+import { JournalSession, JournalMessage, ContextRailItem, LocationContext, ReflectionMode, ActionSuggestion } from '../types';
 import { FormattedResponse } from './FormattedResponse';
 import { MemoryReviewSection } from './MemoryReviewSection';
 import { VaultPresence } from './VaultPresence';
 import { VoiceStudioView } from './VoiceStudioView';
+import { ActionConfirmationCard } from './ActionConfirmationCard';
+import { createGoogleCalendarUrl, detectActionSuggestions } from '../utils/actionHandoffs';
 
 /* ============================================================================
    Presentational Decomposition Components
@@ -40,6 +42,8 @@ interface ReflectHeaderProps {
   isCompleted: boolean;
   isEditingTitle: boolean;
   editTitleValue: string;
+  reflectionMode: ReflectionMode;
+  onReflectionModeChange: (mode: ReflectionMode) => void;
   onBack: () => void;
   onStartEditTitle: () => void;
   onSaveTitle: () => void;
@@ -47,6 +51,10 @@ interface ReflectHeaderProps {
   onTitleChange: (value: string) => void;
   onOpenConcludeModal: () => void;
   onEnterVoiceMode?: () => void;
+  onSummarize?: () => void;
+  isSummarizing?: boolean;
+  onExtractActions?: () => void;
+  isExtractingActions?: boolean;
 }
 
 export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
@@ -54,6 +62,8 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
   isCompleted,
   isEditingTitle,
   editTitleValue,
+  reflectionMode,
+  onReflectionModeChange,
   onBack,
   onStartEditTitle,
   onSaveTitle,
@@ -61,6 +71,10 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
   onTitleChange,
   onOpenConcludeModal,
   onEnterVoiceMode,
+  onSummarize,
+  isSummarizing,
+  onExtractActions,
+  isExtractingActions,
 }) => {
   const { userProfile, updatePreferences } = useAuth();
   const isContinued = Boolean(session?.continuedFromSessionId);
@@ -139,8 +153,25 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Companion Tone & Depth Contextual Selectors */}
+        {/* Companion Tone & Depth & Mode Contextual Selectors */}
         <div className="hidden lg:flex items-center gap-1.5 text-xs text-[var(--gv-text-secondary)] border border-[var(--gv-border-subtle)] rounded-xl px-2.5 h-9 bg-[var(--gv-surface-ground)]">
+          <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Mode</span>
+          <select
+            value={reflectionMode}
+            onChange={(e) => onReflectionModeChange(e.target.value as ReflectionMode)}
+            className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
+            title="Reflection Mode"
+            aria-label="Reflection Mode"
+          >
+            <option value="reflect" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Reflect</option>
+            <option value="deep_reflection" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Deep</option>
+            <option value="brainstorm" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Brainstorm</option>
+            <option value="reframe" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Reframe</option>
+            <option value="action_plan" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Action Plan</option>
+            <option value="gratitude" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Gratitude</option>
+            <option value="executive_summary" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Summary</option>
+          </select>
+          <span className="text-[var(--gv-border-strong)]">|</span>
           <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Tone</span>
           <select
             value={userProfile?.preferences?.conversationTone || 'empathic'}
@@ -184,6 +215,36 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse"></span>
               <span>Active</span>
             </span>
+
+            {onSummarize && (
+              <button
+                type="button"
+                onClick={onSummarize}
+                disabled={isSummarizing}
+                id="summarize-reflection-btn"
+                className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+                title="Summarize reflection takeaways"
+                aria-label="Summarize reflection takeaways"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+                <span>{isSummarizing ? 'Summarizing...' : 'Summarize'}</span>
+              </button>
+            )}
+
+            {onExtractActions && (
+              <button
+                type="button"
+                onClick={onExtractActions}
+                disabled={isExtractingActions}
+                id="extract-actions-btn"
+                className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+                title="Extract calendar commitments and actions"
+                aria-label="Extract calendar commitments and actions"
+              >
+                <Calendar className="w-3.5 h-3.5 text-[var(--gv-accent)]" />
+                <span>{isExtractingActions ? 'Extracting...' : 'Actions'}</span>
+              </button>
+            )}
 
             {/* Focus Mode 36px Discoverable Button */}
             <button
@@ -244,8 +305,6 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
   onAddReminder,
   onDismiss,
 }) => {
-  const [calendarNotice, setCalendarNotice] = useState(false);
-
   return (
     <div className="my-4 p-4 rounded-2xl border border-[var(--gv-accent-border)] bg-[var(--gv-surface-ground)]/90 text-xs font-sans shadow-xs animate-turn-enter">
       <div className="flex items-center justify-between gap-2">
@@ -265,12 +324,6 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
         &ldquo;{commitment.fact}&rdquo;
       </p>
 
-      {calendarNotice && (
-        <div className="mt-2 text-[11px] text-[var(--gv-accent-text)] bg-[var(--gv-accent-muted)] p-2 rounded-lg border border-[var(--gv-accent-border)]">
-          Calendar scheduling will be available soon with verified personal confirmation.
-        </div>
-      )}
-
       <div className="mt-3 flex items-center gap-2">
         {onAddReminder && (
           <button
@@ -283,14 +336,19 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={() => setCalendarNotice(true)}
+        <a
+          href={createGoogleCalendarUrl({
+            title: commitment.fact,
+            details: `Commitment from Gemini Vault reflection.\n\n"${commitment.fact}"`,
+            startDate: commitment.deadline,
+          })}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-[11px] font-medium transition cursor-pointer"
         >
-          <Calendar className="w-3 h-3" />
-          <span>Add to Calendar</span>
-        </button>
+          <Calendar className="w-3 h-3 text-[var(--gv-accent-gold)]" />
+          <span>Add to Google Calendar</span>
+        </a>
 
         {onDismiss && (
           <button
@@ -649,6 +707,17 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   const [showConcludeModal, setShowConcludeModal] = useState(false);
   const [isConcluding, setIsConcluding] = useState(false);
   const [isReviewingMemories, setIsReviewingMemories] = useState(false);
+  const [reflectionMode, setReflectionMode] = useState<ReflectionMode>('reflect');
+  const [summaryResult, setSummaryResult] = useState<{
+    summary: string;
+    takeaways: string[];
+    nonClinicalMoodObservation?: string;
+  } | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summarizeError, setSummarizeError] = useState<string | null>(null);
+  const [sessionActions, setSessionActions] = useState<ActionSuggestion[]>([]);
+  const [isExtractingActions, setIsExtractingActions] = useState(false);
+  const [extractActionsError, setExtractActionsError] = useState<string | null>(null);
 
   const [highlightedTurnId, setHighlightedTurnId] = useState<string | null>(() => {
     return new URLSearchParams(window.location.search).get('turn');
@@ -995,6 +1064,7 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
           clientMessageId: clientMsgId,
           conversationTone: userProfile?.preferences?.conversationTone,
           reflectionDepth: userProfile?.preferences?.reflectionDepth,
+          reflectionMode,
           locationContext: locationContext || undefined,
         }),
       });
@@ -1007,33 +1077,46 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
 
       // Append assistant message or update message list
       if (data.assistantMessage) {
-  setScrollTargetAssistantId(data.assistantMessage.id);
-  focusAfterResponseRef.current = true;
-  setMessages((prev) => {
-    const updated = [...prev];
+        setScrollTargetAssistantId(data.assistantMessage.id);
+        focusAfterResponseRef.current = true;
 
-    // Replace the optimistic user message with the
-    // canonical server message instead of appending another one.
-    const optimisticIndex = updated.findIndex((m) => m.id === clientMsgId);
+        // Opportunistically detect action suggestions in response content
+        if (data.assistantMessage.content) {
+          const detected = detectActionSuggestions(data.assistantMessage.content);
+          if (detected.length > 0) {
+            setSessionActions((prev) => {
+              const existingIds = new Set(prev.map((a) => a.id));
+              const newOnes = detected.filter((a) => !existingIds.has(a.id));
+              return [...prev, ...newOnes];
+            });
+          }
+        }
 
-    if (optimisticIndex !== -1 && data.userMessage) {
-      updated[optimisticIndex] = data.userMessage;
-    } else if (data.userMessage) {
-      updated.push(data.userMessage);
-    }
+        setMessages((prev) => {
+          const updated = [...prev];
 
-    // Prevent duplicate assistant messages.
-    const assistantExists = updated.some(
-      (m) => m.id === data.assistantMessage.id
-    );
+          // Replace the optimistic user message with the
+          // canonical server message instead of appending another one.
+          const optimisticIndex = updated.findIndex((m) => m.id === clientMsgId);
 
-    if (!assistantExists) {
-      updated.push(data.assistantMessage);
-    }
+          if (optimisticIndex !== -1 && data.userMessage) {
+            updated[optimisticIndex] = data.userMessage;
+          } else if (data.userMessage) {
+            updated.push(data.userMessage);
+          }
 
-    return updated;
-  });
-}
+          // Prevent duplicate assistant messages.
+          const assistantExists = updated.some(
+            (m) => m.id === data.assistantMessage.id
+          );
+
+          if (!assistantExists) {
+            updated.push(data.assistantMessage);
+          }
+
+          return updated;
+        });
+      }
     } catch (err: unknown) {
       console.error('[JournalSessionView] Send error:', err);
       const errMsg = err instanceof Error ? err.message : 'Unable to connect to Gemini companion.';
@@ -1045,6 +1128,66 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
       });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleSummarizeSession = async () => {
+    if (isSummarizing) return;
+    setIsSummarizing(true);
+    setSummarizeError(null);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error('Authentication required.');
+      const res = await fetch(`/api/journal/session/${sessionId}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Unable to summarize reflection.');
+      setSummaryResult({
+        summary: data.summary,
+        takeaways: data.takeaways || [],
+        nonClinicalMoodObservation: data.nonClinicalMoodObservation,
+      });
+    } catch (err: unknown) {
+      console.error('[JournalSessionView] Summarize error:', err);
+      setSummarizeError(err instanceof Error ? err.message : 'Failed to generate summary.');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  const handleExtractActions = async () => {
+    if (isExtractingActions) return;
+    setIsExtractingActions(true);
+    setExtractActionsError(null);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error('Authentication required.');
+      const res = await fetch(`/api/journal/session/${sessionId}/extract-actions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Unable to extract actions.');
+      if (Array.isArray(data.actions)) {
+        setSessionActions((prev) => {
+          const existingIds = new Set(prev.map((a) => a.id));
+          const newActions = data.actions.filter((a: ActionSuggestion) => !existingIds.has(a.id));
+          return [...prev, ...newActions];
+        });
+      }
+    } catch (err: unknown) {
+      console.error('[JournalSessionView] Extract actions error:', err);
+      setExtractActionsError(err instanceof Error ? err.message : 'Failed to extract actions.');
+    } finally {
+      setIsExtractingActions(false);
     }
   };
 
@@ -1186,6 +1329,8 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
         isCompleted={isCompleted}
         isEditingTitle={isEditingTitle}
         editTitleValue={editTitleValue}
+        reflectionMode={reflectionMode}
+        onReflectionModeChange={setReflectionMode}
         onBack={onBack}
         onStartEditTitle={() => setIsEditingTitle(true)}
         onSaveTitle={handleSaveTitle}
@@ -1193,6 +1338,10 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
         onTitleChange={setEditTitleValue}
         onOpenConcludeModal={() => setShowConcludeModal(true)}
         onEnterVoiceMode={() => setStudioMode('voice')}
+        onSummarize={messages.length > 0 ? handleSummarizeSession : undefined}
+        isSummarizing={isSummarizing}
+        onExtractActions={messages.length > 0 ? handleExtractActions : undefined}
+        isExtractingActions={isExtractingActions}
       />
 
       {/* 2. Main Studio Canvas — Dynamic Editorial Reading Measure */}
@@ -1202,6 +1351,105 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
         aria-label="Reflection conversation canvas"
       >
         <div className="gv-reading-measure">
+          {/* Summary Result Banner */}
+          {summaryResult && (
+            <div className="mb-6 p-5 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-accent-border)] shadow-xs animate-turn-enter">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-[var(--gv-accent)]">
+                  <Sparkles className="w-4 h-4 text-[var(--gv-accent-gold)]" />
+                  <span className="font-serif text-sm font-medium">Reflection Synthesis</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSummaryResult(null)}
+                  className="p-1 text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+                  aria-label="Dismiss summary"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="mt-3 font-serif text-sm text-[var(--gv-text-primary)] leading-relaxed">
+                {summaryResult.summary}
+              </p>
+              {summaryResult.takeaways.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-[var(--gv-border-subtle)]">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--gv-text-tertiary)]">
+                    Key Takeaways
+                  </span>
+                  <ul className="mt-1.5 space-y-1 text-xs text-[var(--gv-text-secondary)]">
+                    {summaryResult.takeaways.map((takeaway, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-[var(--gv-accent)] mt-0.5">•</span>
+                        <span>{takeaway}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {summaryResult.nonClinicalMoodObservation && (
+                <p className="mt-3 text-[11px] italic text-[var(--gv-text-tertiary)]">
+                  Reflective Observation: {summaryResult.nonClinicalMoodObservation}
+                </p>
+              )}
+            </div>
+          )}
+
+          {summarizeError && (
+            <div className="mb-4 p-3 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] text-xs text-[var(--gv-text-secondary)] flex items-center justify-between">
+              <span>{summarizeError}</span>
+              <button
+                type="button"
+                onClick={() => setSummarizeError(null)}
+                className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] ml-2"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Action Suggestions & Calendar Handoffs */}
+          {sessionActions.length > 0 && (
+            <div className="my-5 space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-medium text-[var(--gv-text-secondary)] px-1">
+                <span className="flex items-center gap-1.5 text-[var(--gv-accent)]">
+                  <Calendar className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+                  Proposed Next Actions ({sessionActions.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSessionActions([])}
+                  className="text-[11px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+                >
+                  Dismiss all
+                </button>
+              </div>
+              <div className="space-y-2">
+                {sessionActions.map((action) => (
+                  <ActionConfirmationCard
+                    key={action.id}
+                    action={action}
+                    onConfirmCommitment={() => {}}
+                    onDismiss={(id) => {
+                      setSessionActions((prev) => prev.filter((a) => a.id !== id));
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {extractActionsError && (
+            <div className="mb-4 p-3 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] text-xs text-[var(--gv-text-secondary)] flex items-center justify-between">
+              <span>{extractActionsError}</span>
+              <button
+                type="button"
+                onClick={() => setExtractActionsError(null)}
+                className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] ml-2"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           {messages.length === 0 ? (
             <div className="py-20 sm:py-24 text-center space-y-3 animate-turn-enter">
               <div className="w-10 h-10 rounded-2xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center text-[var(--gv-accent-gold)] mx-auto mb-3">

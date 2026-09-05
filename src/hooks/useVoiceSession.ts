@@ -3,6 +3,8 @@ import {
   JournalMessage,
   VoiceSessionStatus,
   VoiceServerMessage,
+  ActionSuggestion,
+  GlobalAppContext,
 } from '../types';
 import { VaultPresenceState } from '../components/VaultPresence';
 import { AudioCaptureService, AudioPlaybackService, formatMicrophoneError } from '../utils/audioProcessor';
@@ -10,10 +12,13 @@ import { AudioCaptureService, AudioPlaybackService, formatMicrophoneError } from
 interface UseVoiceSessionOptions {
   sessionId: string;
   getIdToken: () => Promise<string | null>;
+  contextManifest?: GlobalAppContext;
   onTurnPersisted?: (turn: JournalMessage) => void;
   onInterrupted?: (turnId?: string, text?: string) => void;
   onConcluded?: (sessionId: string) => void;
   onSessionTitled?: (title: string) => void;
+  onNavigationIntent?: (target: string, resourceId?: string) => void;
+  onActionSuggestion?: (action: ActionSuggestion) => void;
 }
 
 const TERMINAL_CLOSE_CODES = new Set([
@@ -29,10 +34,13 @@ const TERMINAL_CLOSE_CODES = new Set([
 export function useVoiceSession({
   sessionId,
   getIdToken,
+  contextManifest,
   onTurnPersisted,
   onInterrupted,
   onConcluded,
   onSessionTitled,
+  onNavigationIntent,
+  onActionSuggestion,
 }: UseVoiceSessionOptions) {
   const [status, setStatus] = useState<VoiceSessionStatus>('unauthenticated');
   const [presenceState, setPresenceState] = useState<VaultPresenceState>('idle');
@@ -42,6 +50,8 @@ export function useVoiceSession({
   const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [durationSeconds, setDurationSeconds] = useState(0);
+
+  const [actionSuggestions, setActionSuggestions] = useState<ActionSuggestion[]>([]);
 
   const socketRef = useRef<WebSocket | null>(null);
   const captureRef = useRef<AudioCaptureService | null>(null);
@@ -60,6 +70,8 @@ export function useVoiceSession({
     onInterrupted,
     onConcluded,
     onSessionTitled,
+    onNavigationIntent,
+    onActionSuggestion,
   });
   useEffect(() => {
     callbacksRef.current = {
@@ -68,6 +80,8 @@ export function useVoiceSession({
       onInterrupted,
       onConcluded,
       onSessionTitled,
+      onNavigationIntent,
+      onActionSuggestion,
     };
   });
 
@@ -342,6 +356,27 @@ export function useVoiceSession({
             break;
           }
 
+          case 'navigation_intent': {
+            if (callbacksRef.current.onNavigationIntent) {
+              callbacksRef.current.onNavigationIntent(msg.target, msg.resourceId);
+            }
+            window.dispatchEvent(
+              new CustomEvent('gv-navigate', { detail: { target: msg.target, resourceId: msg.resourceId } })
+            );
+            break;
+          }
+
+          case 'action_suggestion': {
+            setActionSuggestions((prev) => {
+              if (prev.some((a) => a.id === msg.action.id)) return prev;
+              return [...prev, msg.action];
+            });
+            if (callbacksRef.current.onActionSuggestion) {
+              callbacksRef.current.onActionSuggestion(msg.action);
+            }
+            break;
+          }
+
           case 'error': {
             console.warn('[useVoiceSession] Server error:', msg.code, msg.message);
             setError(msg.message);
@@ -489,6 +524,7 @@ export function useVoiceSession({
     isMuted,
     error,
     durationSeconds,
+    actionSuggestions,
     start,
     stop,
     toggleMute,

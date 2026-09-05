@@ -62,6 +62,7 @@ export type VoiceSessionStatus =
 export interface VoiceClientAuthMessage {
   type: 'auth';
   token: string;
+  contextManifest?: GlobalAppContext;
 }
 
 export interface VoiceClientAudioMessage {
@@ -86,13 +87,19 @@ export interface VoiceClientConcludeMessage {
   type: 'conclude_session';
 }
 
+export interface VoiceClientContextUpdateMessage {
+  type: 'context_update';
+  contextManifest: GlobalAppContext;
+}
+
 export type VoiceClientMessage =
   | VoiceClientAuthMessage
   | VoiceClientAudioMessage
   | VoiceClientEndOfTurnMessage
   | VoiceClientRefreshMessage
   | VoiceClientInterruptMessage
-  | VoiceClientConcludeMessage;
+  | VoiceClientConcludeMessage
+  | VoiceClientContextUpdateMessage;
 
 export interface VoiceServerAuthenticatedMessage {
   type: 'authenticated';
@@ -153,6 +160,18 @@ export interface VoiceServerErrorMessage {
   fatal?: boolean;
 }
 
+export interface VoiceServerNavigationMessage {
+  type: 'navigation_intent';
+  target: string;
+  resourceId?: string;
+  reason?: string;
+}
+
+export interface VoiceServerActionMessage {
+  type: 'action_suggestion';
+  action: ActionSuggestion;
+}
+
 export type VoiceServerMessage =
   | VoiceServerAuthenticatedMessage
   | VoiceServerReadyMessage
@@ -164,7 +183,9 @@ export type VoiceServerMessage =
   | VoiceServerSessionConcludedMessage
   | VoiceServerSessionWarningMessage
   | VoiceServerSessionTitledMessage
-  | VoiceServerErrorMessage;
+  | VoiceServerErrorMessage
+  | VoiceServerNavigationMessage
+  | VoiceServerActionMessage;
 
 export interface JournalSession {
   id: string;
@@ -343,6 +364,59 @@ export interface ContextRailItem {
   sourceSessionId?: string;
   actionLabel?: string;
   onAction?: () => void;
+}
+
+export type ReflectionMode =
+  | 'reflect'
+  | 'deep_reflection'
+  | 'brainstorm'
+  | 'reframe'
+  | 'action_plan'
+  | 'gratitude'
+  | 'executive_summary';
+
+export interface GlobalAppContext {
+  currentView: string;
+  currentResource?: {
+    type: 'document' | 'reflection' | 'moment' | 'none';
+    id?: string;
+    title?: string;
+  };
+  vaultSummary?: {
+    openLoopsCount: number;
+    snoozedLoopsCount: number;
+    activeCommitmentsCount: number;
+    totalMemoriesCount: number;
+  };
+  availableTargets: string[];
+  currentPreferences?: {
+    depth?: string;
+    tone?: string;
+  };
+}
+
+export type ActionType =
+  | 'commitment'
+  | 'calendar_event'
+  | 'location'
+  | 'email_draft'
+  | 'revisit'
+  | 'achievement';
+
+export interface ActionSuggestion {
+  id: string;
+  type: ActionType;
+  title: string;
+  description?: string;
+  dateTime?: string;
+  location?: string;
+  recipient?: string;
+  confidence?: number;
+  sourceEvidence?: string;
+  sourceSessionId?: string;
+  sourceMessageId?: string;
+  confirmed?: boolean;
+  status?: 'suggested' | 'confirmed' | 'dismissed';
 }
 
 export * from './documents';

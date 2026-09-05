@@ -17,6 +17,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { JournalSession, Memory } from '../types';
+import {
+  createGoogleCalendarUrl,
+  getUpcomingPlanningOpportunities,
+  PlanningOpportunity,
+} from '../utils/actionHandoffs';
 
 interface CommitmentsCalendarViewProps {
   onOpenSession?: (sessionId: string) => void;
@@ -47,6 +52,40 @@ export const CommitmentsCalendarView: React.FC<CommitmentsCalendarViewProps> = (
   const [snoozeTargetMemory, setSnoozeTargetMemory] = useState<Memory | null>(null);
   const [snoozeDays, setSnoozeDays] = useState<number>(7);
   const [isSnoozing, setIsSnoozing] = useState(false);
+
+  // Week summary state
+  const [weekSummary, setWeekSummary] = useState<string | null>(null);
+  const [isSummarizingWeek, setIsSummarizingWeek] = useState(false);
+  const [weekSummaryError, setWeekSummaryError] = useState<string | null>(null);
+
+  const handleSummarizeWeek = async () => {
+    if (isSummarizingWeek) return;
+    setIsSummarizingWeek(true);
+    setWeekSummaryError(null);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error('Authentication required.');
+      const res = await fetch('/api/memories/calendar-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Unable to summarize calendar week.');
+      setWeekSummary(data.summary);
+    } catch (err: unknown) {
+      console.error('[CommitmentsCalendar] Summarize week error:', err);
+      setWeekSummaryError(err instanceof Error ? err.message : 'Unable to summarize week.');
+    } finally {
+      setIsSummarizingWeek(false);
+    }
+  };
+
+  const upcomingOpportunities = useMemo(() => {
+    return getUpcomingPlanningOpportunities();
+  }, []);
 
   // Load memories and sessions
   const loadData = async () => {
@@ -310,8 +349,18 @@ export const CommitmentsCalendarView: React.FC<CommitmentsCalendarViewProps> = (
           </p>
         </div>
 
-        {/* Add Commitment Action */}
-        <div>
+        {/* Actions */}
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleSummarizeWeek}
+            disabled={isSummarizingWeek}
+            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] text-[var(--gv-text-primary)] text-xs font-medium transition active:scale-[0.98] cursor-pointer disabled:opacity-50"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+            <span>{isSummarizingWeek ? 'Summarizing...' : 'Summarize My Week'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
@@ -322,6 +371,42 @@ export const CommitmentsCalendarView: React.FC<CommitmentsCalendarViewProps> = (
           </button>
         </div>
       </div>
+
+      {/* Week Calendar Summary Card */}
+      {weekSummary && (
+        <div className="mb-6 p-5 rounded-2xl bg-[var(--gv-surface-raised)] border border-[var(--gv-accent-border)] shadow-xs animate-turn-enter">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-medium text-[var(--gv-accent)]">
+              <Sparkles className="w-4 h-4 text-[var(--gv-accent-gold)]" />
+              <span className="font-serif text-sm font-medium">Calendar Reflection Synthesis</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWeekSummary(null)}
+              className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition"
+              aria-label="Dismiss week summary"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="mt-2.5 font-serif text-sm text-[var(--gv-text-primary)] leading-relaxed">
+            {weekSummary}
+          </p>
+        </div>
+      )}
+
+      {weekSummaryError && (
+        <div className="mb-6 p-3 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] text-xs text-[var(--gv-text-secondary)] flex items-center justify-between">
+          <span>{weekSummaryError}</span>
+          <button
+            type="button"
+            onClick={() => setWeekSummaryError(null)}
+            className="text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] ml-2 text-xs"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Suggested Focus Banner (Deterministic recommendation from existing open loops) */}
       {suggestedFocus && filterTab !== 'resolved' && (
@@ -520,6 +605,21 @@ export const CommitmentsCalendarView: React.FC<CommitmentsCalendarViewProps> = (
                           <Clock className="w-3.5 h-3.5" />
                           <span>Snooze</span>
                         </button>
+                        <span className="text-[var(--gv-border-strong)]">•</span>
+                        <a
+                          href={createGoogleCalendarUrl({
+                            title: item.fact,
+                            details: item.userNotes ? `${item.userNotes}\n\nFrom Gemini Vault reflection.` : 'Gemini Vault commitment.',
+                            startDate: item.snoozedUntil || undefined,
+                          })}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[var(--gv-text-secondary)] hover:text-[var(--gv-accent)] transition cursor-pointer"
+                          title="Schedule in Google Calendar"
+                        >
+                          <CalendarIcon className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+                          <span>Add to Calendar</span>
+                        </a>
                       </>
                     )}
 
@@ -551,6 +651,62 @@ export const CommitmentsCalendarView: React.FC<CommitmentsCalendarViewProps> = (
           })}
         </div>
       )}
+
+      {/* Upcoming Seasonal & Holiday Planning Opportunities (External Context) */}
+      <div className="mt-10 pt-8 border-t border-[var(--gv-border-subtle)] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[var(--gv-text-primary)]">
+            <CalendarDays className="w-4 h-4 text-[var(--gv-accent-gold)]" />
+            <h3 className="text-sm font-semibold">Upcoming Planning Opportunities</h3>
+          </div>
+          <span className="text-[10px] uppercase font-mono tracking-wider text-[var(--gv-text-tertiary)] bg-[var(--gv-surface-ground)] px-2 py-0.5 rounded-full border border-[var(--gv-border-subtle)]">
+            External Context
+          </span>
+        </div>
+        <p className="text-xs text-[var(--gv-text-tertiary)] leading-relaxed">
+          Public holidays and seasonal milestones providing natural windows for deep reflection, rest, or focus blocks.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          {upcomingOpportunities.map((opp) => (
+            <div
+              key={opp.id}
+              className="p-4 rounded-2xl bg-[var(--gv-surface-raised)]/60 border border-[var(--gv-border-subtle)] space-y-2 hover:border-[var(--gv-border-default)] transition"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-serif text-sm font-medium text-[var(--gv-text-primary)]">
+                  {opp.name}
+                </span>
+                <span className="text-[11px] font-mono text-[var(--gv-accent)] font-medium shrink-0">
+                  {opp.label}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--gv-text-secondary)] leading-relaxed">
+                {opp.description}
+              </p>
+              <div className="pt-2 flex items-center justify-between border-t border-[var(--gv-border-subtle)]/50">
+                <span className="text-[10px] uppercase tracking-wider text-[var(--gv-text-tertiary)]">
+                  {opp.type.replace(/_/g, ' ')}
+                </span>
+                <a
+                  href={createGoogleCalendarUrl({
+                    title: opp.name,
+                    details: opp.description,
+                    startDate: opp.dateStr,
+                    isAllDay: true,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-[var(--gv-text-secondary)] hover:text-[var(--gv-accent)] transition cursor-pointer"
+                >
+                  <CalendarIcon className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+                  <span>Add to Calendar</span>
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Add Commitment Modal */}
       {isAddModalOpen && (

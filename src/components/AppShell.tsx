@@ -125,6 +125,17 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
   }, [activeSessionId]);
 
+  // Listen for custom event gv-toggle-focus-mode from header/composer
+  useEffect(() => {
+    const handleToggleEvent = () => {
+      if (activeSessionId) {
+        setIsFocusMode((prev) => !prev);
+      }
+    };
+    window.addEventListener('gv-toggle-focus-mode', handleToggleEvent);
+    return () => window.removeEventListener('gv-toggle-focus-mode', handleToggleEvent);
+  }, [activeSessionId]);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--gv-surface-base)] text-[var(--gv-text-primary)] font-sans antialiased select-auto">
       {/* 1. Persistent Left Sidebar (Desktop & Tablet Wide) */}
@@ -159,12 +170,12 @@ export const AppShell: React.FC<AppShellProps> = ({
               type="button"
               id="exit-focus-mode-btn"
               onClick={() => setIsFocusMode(false)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--gv-surface-raised)]/90 backdrop-blur-md border border-[var(--gv-border-strong)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-medium shadow-md transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[36px] rounded-full bg-[var(--gv-surface-raised)]/95 backdrop-blur-md border border-[var(--gv-border-strong)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-medium shadow-md hover:border-[var(--gv-border-accent)] transition cursor-pointer active:scale-95"
               title="Exit Focus Mode (Esc or ⇧⌘F)"
             >
               <Minimize2 className="w-3.5 h-3.5 text-[var(--gv-accent)]" />
-              <span>Exit Focus Mode</span>
-              <span className="font-mono text-[10px] text-[var(--gv-text-muted)] ml-1">ESC</span>
+              <span>Exit Focus</span>
+              <span className="font-mono text-[10px] text-[var(--gv-text-muted)] ml-1 bg-[var(--gv-surface-ground)] px-1.5 py-0.5 rounded border border-[var(--gv-border-subtle)]">ESC</span>
             </button>
           </div>
         )}
@@ -263,7 +274,14 @@ export const AppShell: React.FC<AppShellProps> = ({
         onToggleTheme={toggle}
         currentTheme={theme === 'morning' ? 'morning' : 'night'}
         isFocusMode={isFocusMode}
-        onToggleFocusMode={activeSessionId ? () => setIsFocusMode((prev) => !prev) : undefined}
+        onToggleFocusMode={() => {
+          if (activeSessionId) {
+            setIsFocusMode((prev) => !prev);
+          } else {
+            if (onStartNewReflection) onStartNewReflection();
+            else handleNavigate('home');
+          }
+        }}
       />
     </div>
   );

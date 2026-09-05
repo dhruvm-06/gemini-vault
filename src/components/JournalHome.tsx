@@ -41,7 +41,7 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
   onContinueSession,
   isCreating,
 }) => {
-  const { getIdToken, user } = useAuth();
+  const { getIdToken, user, userProfile, updatePreferences } = useAuth();
   const [initialThought, setInitialThought] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [sessions, setSessions] = useState<JournalSession[]>([]);
@@ -58,7 +58,16 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
   const [askedQuestion, setAskedQuestion] = useState('');
   const [askingVault, setAskingVault] = useState(false);
   const [askError, setAskError] = useState('');
+  const [askGrounding, setAskGrounding] = useState<Array<{ id: string; fact: string; category: string; sourceSnippet?: string }>>([]);
+  const [askGroundingSummary, setAskGroundingSummary] = useState<string | null>(null);
+  const [showEvidence, setShowEvidence] = useState<boolean>(() => userProfile?.preferences?.evidenceVisibility === 'expanded');
   const askInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (userProfile?.preferences?.evidenceVisibility) {
+      setShowEvidence(userProfile.preferences.evidenceVisibility === 'expanded');
+    }
+  }, [userProfile?.preferences?.evidenceVisibility]);
 
   const suggestedDirections = [
     {
@@ -225,6 +234,8 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
       }
 
       setAskAnswer(typeof data.answer === 'string' ? data.answer : 'Your Vault did not return an answer.');
+      setAskGrounding(Array.isArray(data.grounding) ? data.grounding : []);
+      setAskGroundingSummary(typeof data.groundingSummary === 'string' ? data.groundingSummary : null);
       setAskQuestion('');
     } catch (err: unknown) {
       console.error('[JournalHome] Error asking Vault:', err);
@@ -600,7 +611,23 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
                 <div className="rounded-2xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] overflow-hidden">
                   <div className="px-4 py-3 border-b border-[var(--gv-border-subtle)] flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wider text-[var(--gv-text-tertiary)] font-semibold">Your question</div>
+                      <div className="flex items-center flex-wrap gap-2">
+                        <span className="text-[10px] uppercase tracking-wider text-[var(--gv-text-tertiary)] font-semibold">Your question</span>
+                        {askGrounding.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = !showEvidence;
+                              setShowEvidence(next);
+                              void updatePreferences({ evidenceVisibility: next ? 'expanded' : 'collapsed' });
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--gv-accent)] hover:underline cursor-pointer ml-1"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            <span>{showEvidence ? 'Hide evidence' : `View evidence (${askGrounding.length})`}</span>
+                          </button>
+                        )}
+                      </div>
                       <p className="mt-1 text-sm text-[var(--gv-text-primary)] leading-relaxed whitespace-pre-wrap">{askedQuestion}</p>
                     </div>
                     <button
@@ -609,11 +636,28 @@ export const JournalHome: React.FC<JournalHomeProps> = ({
                         setAskQuestion(askedQuestion);
                         requestAnimationFrame(() => askInputRef.current?.focus({ preventScroll: true }));
                       }}
-                      className="shrink-0 text-[11px] text-[var(--gv-accent)] hover:underline"
+                      className="shrink-0 text-[11px] text-[var(--gv-accent)] hover:underline cursor-pointer"
                     >
                       Edit
                     </button>
                   </div>
+
+                  {showEvidence && askGrounding.length > 0 && (
+                    <div className="px-4 py-3 bg-[var(--gv-surface-base)] border-b border-[var(--gv-border-subtle)] text-xs text-[var(--gv-text-secondary)] space-y-2">
+                      <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--gv-text-tertiary)]">
+                        {askGroundingSummary || 'Authoritative Vault Sources'}
+                      </div>
+                      <ul className="space-y-1.5 pl-2 border-l-2 border-[var(--gv-accent)]/40">
+                        {askGrounding.slice(0, 5).map((item) => (
+                          <li key={item.id} className="leading-relaxed">
+                            <span className="font-medium text-[var(--gv-text-primary)] capitalize">{item.category}: </span>
+                            <span>{item.fact}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <div className="p-4 font-serif text-[15px] leading-relaxed text-[var(--gv-text-primary)]">
                     <FormattedResponse content={askAnswer} />
                   </div>

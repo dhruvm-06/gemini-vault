@@ -76,7 +76,7 @@ interface IntelligenceDashboardProps {
 }
 
 export const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ onOpenSession }) => {
-  const { getIdToken, user, userProfile } = useAuth();
+  const { getIdToken, user, userProfile, updatePreferences } = useAuth();
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [signals, setSignals] = useState<Signal[]>([]);
@@ -452,7 +452,11 @@ export const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ on
                       {groundingItems.length > 0 && (
                         <button
                           type="button"
-                          onClick={() => setShowEvidence((prev) => !prev)}
+                          onClick={() => {
+                            const next = !showEvidence;
+                            setShowEvidence(next);
+                            void updatePreferences({ evidenceVisibility: next ? 'expanded' : 'collapsed' });
+                          }}
                           className="ml-1 inline-flex items-center gap-1 text-[11px] font-medium text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)] underline decoration-dotted underline-offset-2 transition-colors cursor-pointer"
                         >
                           {showEvidence ? 'Hide evidence' : `View evidence (${groundingItems.length})`}

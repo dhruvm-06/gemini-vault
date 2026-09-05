@@ -8,6 +8,7 @@ import { VaultDashboard } from './components/VaultDashboard';
 import { IntelligenceDashboard } from './components/IntelligenceDashboard';
 import { DocumentsStudio } from './components/DocumentsStudio';
 import { VaultMomentsView } from './components/VaultMomentsView';
+import { CommitmentsCalendarView } from './components/CommitmentsCalendarView';
 import { AppShell } from './components/AppShell';
 import { LandingPage } from './components/LandingPage';
 import { AppView, ContextRailItem } from './types';
@@ -431,30 +432,10 @@ export default function App() {
       ) : view === 'documents' ? (
         <DocumentsStudio onNavigate={navigate} />
       ) : view === 'calendar' ? (
-        <div className="min-h-[calc(100vh-3rem)] flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
-          <div className="w-14 h-14 rounded-2xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] flex items-center justify-center mb-5">
-            <Calendar className="w-7 h-7" />
-          </div>
-          <span className="text-[11px] font-medium tracking-widest uppercase text-[var(--gv-accent-gold)] px-3 py-1 rounded-full bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/30">
-            Action Alignment
-          </span>
-          <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-4 font-medium">
-            Commitments & Calendar
-          </h2>
-          <p className="mt-3 text-sm text-[var(--gv-text-secondary)] leading-relaxed">
-            Bridge your reflective insights into scheduled intentions, focus blocks, and loop closures with verified human confirmation.
-          </p>
-          <div className="mt-8 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('intelligence')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-strong)] text-[var(--gv-text-primary)] text-xs font-medium hover:bg-[var(--gv-surface-raised)]/80 transition cursor-pointer"
-            >
-              <span>Open Intelligence & Loops</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        <CommitmentsCalendarView
+          onOpenSession={openSession}
+          onNavigateToIntelligence={() => navigate('intelligence')}
+        />
       ) : (
         <JournalHome
           onStartNewSession={startSession}

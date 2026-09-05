@@ -43,6 +43,7 @@ interface SocketContext {
   accumulatedUserText: string;
   lastFinalizedUserText?: string;
   hasOutputTranscription?: boolean;
+  fallbackModelText?: string;
   finalizedUserTurns: string[];
   userTurnsCount: number;
   titleGenerationState: 'none' | 'initial' | 'refined';
@@ -499,6 +500,7 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                     if (serverContent.interrupted) {
                       console.log(`[Voice Live] Interruption detected for session ${sessionId}`);
                       ctx.hasOutputTranscription = false;
+                      ctx.fallbackModelText = '';
                       // Reset user turn deduplication tracker on interruption so next speech turn starts clean
                       ctx.lastFinalizedUserText = undefined;
                       const partialContent = ctx.accumulatedAssistantText.trim();
@@ -538,7 +540,7 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                       return;
                     }
 
-                    // 4. Handle Output Transcription (Gemini spoken text stream)
+                    // 4. Handle Output Transcription (Gemini spoken text stream - single authoritative source)
                     const outputTranscription = serverContent.outputTranscription || serverContent.output_transcription;
                     if (outputTranscription?.text) {
                       ctx.hasOutputTranscription = true;
@@ -568,20 +570,22 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                             pcm: part.inlineData.data, // base64 24kHz 16-bit PCM
                           });
                         }
-                        // Accumulate and stream interim transcript text ONLY if outputTranscription is not active
-                        if (part.text && !ctx.hasOutputTranscription && !outputTranscription?.text) {
-                          ctx.accumulatedAssistantText += part.text;
-                          sendToClient(ws, {
-                            type: 'interim_transcript',
-                            role: 'assistant',
-                            text: ctx.accumulatedAssistantText,
-                          });
+                        // Note: outputTranscription is the authoritative transcription of spoken audio.
+                        // We buffer part.text solely as a fallback if outputTranscription is entirely absent,
+                        // avoiding duplicate concatenation and speech/transcript desynchronization.
+                        if (part.text) {
+                          ctx.fallbackModelText = (ctx.fallbackModelText || '') + part.text;
                         }
                       }
                     }
 
                     // 6. Handle Turn Completion
                     if (serverContent.turnComplete) {
+                      // If outputTranscription was completely absent for this turn, fall back to buffered model text
+                      if (!ctx.hasOutputTranscription && ctx.fallbackModelText && ctx.accumulatedAssistantText.length === 0) {
+                        ctx.accumulatedAssistantText = ctx.fallbackModelText;
+                      }
+                      ctx.fallbackModelText = '';
                       ctx.hasOutputTranscription = false;
                       // Reset user turn deduplication tracker so repeated short responses ("Yes", "No", etc.) on next turn succeed
                       ctx.lastFinalizedUserText = undefined;

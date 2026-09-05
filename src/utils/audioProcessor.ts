@@ -305,11 +305,13 @@ export class AudioCaptureService {
 
 export class AudioPlaybackService {
   private audioCtx: AudioContext | null = null;
+  private masterGainNode: GainNode | null = null;
   private activeSources: AudioBufferSourceNode[] = [];
   private nextPlayTime = 0;
   private onOutputRmsCallback?: (rms: number) => void;
   private analyserNode: AnalyserNode | null = null;
   private animFrameId?: number;
+  private remainderByte: number | null = null;
 
   constructor() {
     // Lazy initialized on first user interaction or first playback chunk
@@ -320,9 +322,15 @@ export class AudioPlaybackService {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.audioCtx = new AudioContextClass();
 
+      // Master output gain node for clickless volume ramping and DAC pop prevention
+      this.masterGainNode = this.audioCtx.createGain();
+      this.masterGainNode.gain.setValueAtTime(1.0, this.audioCtx.currentTime);
+
       // Analyser for output amplitude visualization
       this.analyserNode = this.audioCtx.createAnalyser();
       this.analyserNode.fftSize = 256;
+
+      this.masterGainNode.connect(this.analyserNode);
       this.analyserNode.connect(this.audioCtx.destination);
       this.startRmsLoop();
     }
@@ -346,28 +354,58 @@ export class AudioPlaybackService {
       bytes[i] = binary.charCodeAt(i);
     }
 
-    // Convert 16-bit PCM little-endian to Float32 at 24,000 Hz
-    const sampleCount = Math.floor(bytes.byteLength / 2);
-    const int16 = new Int16Array(bytes.buffer, 0, sampleCount);
+    // Strict 16-bit PCM alignment: carry over odd remainder bytes across chunk boundaries
+    // to prevent high/low byte swapping which causes loud high-amplitude mechanical beeps.
+    let allBytes: Uint8Array;
+    if (this.remainderByte !== null) {
+      allBytes = new Uint8Array(bytes.length + 1);
+      allBytes[0] = this.remainderByte;
+      allBytes.set(bytes, 1);
+      this.remainderByte = null;
+    } else {
+      allBytes = bytes;
+    }
+
+    if (allBytes.length % 2 !== 0) {
+      this.remainderByte = allBytes[allBytes.length - 1];
+      allBytes = allBytes.subarray(0, allBytes.length - 1);
+    }
+
+    if (allBytes.length === 0) return;
+
+    // Convert 16-bit PCM little-endian directly to Float32 at 24,000 Hz
+    const sampleCount = allBytes.length / 2;
     const float32 = new Float32Array(sampleCount);
     for (let i = 0; i < sampleCount; i++) {
-      float32[i] = int16[i] / 32768.0;
+      const low = allBytes[i * 2];
+      const high = allBytes[i * 2 + 1];
+      let val = (high << 8) | low;
+      if (val >= 32768) val -= 65536;
+      float32[i] = val / 32768.0;
     }
 
     const currentTime = ctx.currentTime;
-    const isNewBurst = this.nextPlayTime < currentTime;
+    const jitterDelta = currentTime - this.nextPlayTime;
+    const isInitialBurst = this.nextPlayTime === 0 || jitterDelta > 0.25;
+    const isMinorJitter = !isInitialBurst && jitterDelta > 0;
 
-    // 1. Playback look-ahead on new speech burst:
-    // When starting playback from silence, schedule 40ms into the future to give the audio quantum
-    // thread and downstream network stream a smooth buffer cushion, avoiding initial starvation and clicks.
-    const startTime = isNewBurst
-      ? Math.max(currentTime + 0.04, this.nextPlayTime)
-      : this.nextPlayTime;
+    // 1. Playback scheduling:
+    // Initial burst from silence: cushion by 40ms to give Web Audio quantum thread headroom.
+    // Minor network jitter (<250ms): resume immediately (2ms context switch) without inserting 40ms silence gaps.
+    // Continuous stream: seamlessly append to nextPlayTime.
+    let startTime: number;
+    if (isInitialBurst) {
+      startTime = currentTime + 0.04;
+    } else if (isMinorJitter) {
+      startTime = currentTime + 0.002;
+    } else {
+      startTime = this.nextPlayTime;
+    }
 
-    // 2. First-chunk micro fade-in (3ms = 72 samples at 24kHz):
-    // Smooth the leading edge of a new burst from 0.0 to 1.0 to eliminate DC step discontinuity pop.
-    if (isNewBurst) {
-      const fadeSamples = Math.min(72, float32.length);
+    // 2. Micro fade-in on burst/underrun to eliminate DC step discontinuity pop:
+    // 3ms (72 samples at 24kHz) on initial burst, 1ms (24 samples) on minor jitter recovery.
+    if (isInitialBurst || isMinorJitter) {
+      const fadeSamples = isInitialBurst ? Math.min(72, float32.length) : Math.min(24, float32.length);
       for (let i = 0; i < fadeSamples; i++) {
         float32[i] *= (i / fadeSamples);
       }
@@ -379,7 +417,9 @@ export class AudioPlaybackService {
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
 
-    if (this.analyserNode) {
+    if (this.masterGainNode) {
+      source.connect(this.masterGainNode);
+    } else if (this.analyserNode) {
       source.connect(this.analyserNode);
     } else {
       source.connect(ctx.destination);
@@ -398,18 +438,47 @@ export class AudioPlaybackService {
   }
 
   /**
-   * Barge-in interruption: immediately cuts all active and queued audio playback in < 20ms
+   * Barge-in interruption: smoothly cuts all active and queued audio playback in < 10ms with 5ms DAC pop ramp
    */
   stopAll(): void {
-    for (const source of this.activeSources) {
+    this.remainderByte = null;
+    const sourcesToStop = [...this.activeSources];
+    this.activeSources = [];
+
+    if (this.audioCtx && this.masterGainNode) {
       try {
-        source.stop();
-        source.disconnect();
+        const curTime = this.audioCtx.currentTime;
+        // 5ms output gain ramp down to eliminate DAC pop
+        this.masterGainNode.gain.setValueAtTime(this.masterGainNode.gain.value, curTime);
+        this.masterGainNode.gain.linearRampToValueAtTime(0.0001, curTime + 0.005);
+        setTimeout(() => {
+          for (const source of sourcesToStop) {
+            try {
+              source.stop();
+              source.disconnect();
+            } catch {}
+          }
+          if (this.masterGainNode && this.audioCtx) {
+            this.masterGainNode.gain.setValueAtTime(1.0, this.audioCtx.currentTime);
+          }
+        }, 6);
       } catch {
-        // Source may already be stopped
+        for (const source of sourcesToStop) {
+          try {
+            source.stop();
+            source.disconnect();
+          } catch {}
+        }
+      }
+    } else {
+      for (const source of sourcesToStop) {
+        try {
+          source.stop();
+          source.disconnect();
+        } catch {}
       }
     }
-    this.activeSources = [];
+
     if (this.audioCtx) {
       this.nextPlayTime = this.audioCtx.currentTime;
     }

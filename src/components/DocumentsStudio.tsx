@@ -21,6 +21,7 @@ import {
   DocumentCitation,
   DocumentQueryResponse,
 } from '../types/documents';
+import { FormattedResponse } from './FormattedResponse';
 
 interface DocumentsStudioProps {
   onNavigate?: (view: any) => void;
@@ -398,14 +399,21 @@ export const DocumentsStudio: React.FC<DocumentsStudioProps> = () => {
                 <textarea
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      void handleQuery(e as unknown as React.FormEvent);
+                    }
+                  }}
                   placeholder={
                     readyDocuments.length === 0
                       ? 'Upload a document above to query your personal archive...'
-                      : 'Ask a question grounded strictly in your uploaded documents...'
+                      : 'Ask a question grounded strictly in your uploaded documents... (Enter to ask, Shift+Enter for newline)'
                   }
                   rows={3}
                   disabled={readyDocuments.length === 0 || isQuerying}
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--gv-surface-bg)] border border-[var(--gv-border-subtle)] text-xs text-[var(--gv-text-primary)] placeholder-[var(--gv-text-muted)] focus:outline-none focus:border-[var(--gv-accent-gold)] resize-none"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] text-xs text-[var(--gv-text-primary)] placeholder-[var(--gv-text-muted)] focus:outline-none focus:border-[var(--gv-accent-gold)] resize-none transition"
+                  aria-label="Document question input"
                 />
               </div>
 
@@ -417,17 +425,18 @@ export const DocumentsStudio: React.FC<DocumentsStudioProps> = () => {
                 <button
                   type="submit"
                   disabled={!question.trim() || readyDocuments.length === 0 || isQuerying}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--gv-text-primary)] text-[var(--gv-surface-bg)] text-xs font-medium hover:opacity-90 transition disabled:opacity-40 cursor-pointer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-white text-xs font-semibold shadow-xs transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)]"
+                  aria-label={isQuerying ? 'Synthesizing answer from documents' : 'Ask documents'}
                 >
                   {isQuerying ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Synthesizing...</span>
+                      <span>Searching...</span>
                     </>
                   ) : (
                     <>
                       <Search className="w-3.5 h-3.5" />
-                      <span>Search & Synthesize</span>
+                      <span>Ask</span>
                     </>
                   )}
                 </button>
@@ -468,9 +477,9 @@ export const DocumentsStudio: React.FC<DocumentsStudioProps> = () => {
                 )}
               </div>
 
-              {/* Editorial Answer */}
-              <div className="text-sm text-[var(--gv-text-primary)] leading-relaxed whitespace-pre-wrap font-sans">
-                {queryResult.answer}
+              {/* Polished Editorial Answer with Safe Markdown Rendering */}
+              <div className="font-serif text-[15px] leading-relaxed text-[var(--gv-text-primary)]">
+                <FormattedResponse content={queryResult.answer} />
               </div>
 
               {/* Latency Breakdown Metrics */}
@@ -496,7 +505,7 @@ export const DocumentsStudio: React.FC<DocumentsStudioProps> = () => {
                       <div
                         key={idx}
                         onClick={() => setActiveCitation(cite)}
-                        className="p-3 rounded-xl bg-[var(--gv-surface-bg)] border border-[var(--gv-border-subtle)] text-left hover:border-[var(--gv-accent-gold)]/40 transition cursor-pointer"
+                        className="p-3 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)] text-left hover:border-[var(--gv-accent-gold)]/40 transition cursor-pointer"
                       >
                         <div className="flex items-center justify-between text-xs text-[var(--gv-text-primary)] font-medium">
                           <span>{cite.filename}</span>
@@ -545,14 +554,14 @@ export const DocumentsStudio: React.FC<DocumentsStudioProps> = () => {
                 </p>
               )}
             </div>
-            <div className="p-4 rounded-xl bg-[var(--gv-surface-bg)] border border-[var(--gv-border-subtle)] text-xs text-[var(--gv-text-primary)] leading-relaxed whitespace-pre-wrap">
+            <div className="p-4 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)] text-xs text-[var(--gv-text-primary)] leading-relaxed whitespace-pre-wrap">
               {activeCitation.sourceExcerpt}
             </div>
             <div className="text-right">
               <button
                 type="button"
                 onClick={() => setActiveCitation(null)}
-                className="px-4 py-2 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-strong)] text-xs text-[var(--gv-text-primary)] font-medium hover:bg-[var(--gv-surface-bg)] transition"
+                className="px-4 py-2 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-strong)] text-xs text-[var(--gv-text-primary)] font-medium hover:bg-[var(--gv-surface-ground)] transition cursor-pointer"
               >
                 Close
               </button>

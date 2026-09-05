@@ -11,7 +11,9 @@ import {
   Calendar,
   Layers,
   ChevronRight,
+  Pin,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { AppView, ContextRailItem } from '../types';
 
 interface ContextRailProps {
@@ -31,6 +33,9 @@ export const ContextRail: React.FC<ContextRailProps> = ({
   onToggle,
   onOpenSession,
 }) => {
+  const { userProfile, updatePreferences } = useAuth();
+  const isPinned = userProfile?.preferences?.contextRailDefault === 'open';
+
   // If there are no items and it's not explicitly in a mode that has active contextual feedback,
   // collapse gracefully rather than showing a wall of empty cards.
   const hasItems = items && items.length > 0;
@@ -138,15 +143,33 @@ export const ContextRail: React.FC<ContextRailProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onToggle}
-            className="p-1.5 rounded-lg text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-raised)] transition cursor-pointer"
-            aria-label="Close context rail"
-            title="Close context rail"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                const next = isPinned ? 'closed' : 'open';
+                void updatePreferences({ contextRailDefault: next });
+              }}
+              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                isPinned
+                  ? 'text-[var(--gv-accent)] bg-[var(--gv-accent-muted)]/40 border border-[var(--gv-accent-border)]'
+                  : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)] hover:bg-[var(--gv-surface-raised)]'
+              }`}
+              aria-label={isPinned ? 'Unpin context rail (currently open by default)' : 'Pin context rail (keep open by default)'}
+              title={isPinned ? 'Rail is open by default. Click to unpin.' : 'Pin rail to keep open by default'}
+            >
+              <Pin className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onToggle}
+              className="p-1.5 rounded-lg text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-raised)] transition cursor-pointer"
+              aria-label="Close context rail"
+              title="Close context rail"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Content Stream */}

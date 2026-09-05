@@ -63,12 +63,12 @@ export const Topbar: React.FC<TopbarProps> = ({
   const photoURL = user?.photoURL;
 
   return (
-    <header className="h-12 border-b border-[var(--gv-border-default)] bg-[var(--gv-surface-base)]/85 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 transition-colors duration-150 select-none">
+    <header className="h-14 border-b border-[var(--gv-border-default)] bg-[var(--gv-surface-base)]/90 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 transition-colors duration-150 select-none">
       {/* Left: View breadcrumb / title + mobile brand */}
       <div className="flex items-center gap-3 min-w-0">
         {/* Mobile brand indicator (visible only below md breakpoint) */}
         <div className="flex md:hidden items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center shrink-0">
             <VaultBrandMark size={16} variant="gold" />
           </div>
           <span className="font-serif text-sm font-medium text-[var(--gv-text-primary)]">
@@ -79,7 +79,7 @@ export const Topbar: React.FC<TopbarProps> = ({
 
         {/* Current View Breadcrumb */}
         <div className="flex items-center gap-2 text-xs font-medium text-[var(--gv-text-primary)] min-w-0">
-          <Icon className="w-3.5 h-3.5 text-[var(--gv-accent)] shrink-0" />
+          <Icon className="w-4 h-4 text-[var(--gv-accent)] shrink-0" />
           <span className="truncate">{meta.label}</span>
           {activeSessionId && (
             <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--gv-accent-muted)] text-[var(--gv-accent)] border border-[var(--gv-accent-border)] font-medium">
@@ -90,41 +90,41 @@ export const Topbar: React.FC<TopbarProps> = ({
       </div>
 
       {/* Center: Micro Vault Presence Intelligence Indicator */}
-      <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--gv-surface-ground)]/80 border border-[var(--gv-border-subtle)] shadow-2xs">
+      <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--gv-surface-ground)]/80 border border-[var(--gv-border-subtle)] shadow-2xs">
         <VaultPresence size="micro" state="idle" label="Vault Intelligence Core Active" />
         <span className="text-[11px] tracking-wide text-[var(--gv-text-secondary)] font-serif">
           Vault Presence
         </span>
       </div>
 
-      {/* Right: Security Badge, Theme Toggle, Context Rail Toggle, Mobile Profile */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      {/* Right: Security Badge, Command Palette, Theme Toggle, Context Rail Toggle, Mobile Profile */}
+      <div className="flex items-center gap-2 sm:gap-2.5">
         {/* Workspace Security Chip */}
-        <div className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-[var(--gv-text-tertiary)] bg-[var(--gv-surface-ground)]/60 border border-[var(--gv-border-subtle)]">
-          <Lock className="w-3 h-3 text-[var(--gv-accent)]" />
+        <div className="hidden lg:inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs text-[var(--gv-text-secondary)] bg-[var(--gv-surface-raised)]/60 border border-[var(--gv-border-subtle)]">
+          <Lock className="w-3.5 h-3.5 text-[var(--gv-accent)]" />
           <span>Private Vault</span>
         </div>
 
-        {/* Command Palette Trigger (Desktop/Tablet only) */}
+        {/* Command Palette Trigger (Desktop/Tablet only) — 36px hit target */}
         {onOpenCommandPalette && (
           <button
             type="button"
             id="topbar-command-palette-btn"
             onClick={onOpenCommandPalette}
-            className="hidden md:inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] transition cursor-pointer"
+            className="hidden md:inline-flex items-center gap-2 h-9 px-3 rounded-xl text-xs font-medium text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] bg-[var(--gv-surface-raised)]/70 hover:bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] transition cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)]"
             title="Open Command Palette (Ctrl+K or ⌘K)"
             aria-label="Open Command Palette (Ctrl+K or ⌘K)"
           >
             <Search className="w-3.5 h-3.5 text-[var(--gv-accent)]" />
-            <span className="font-mono text-[10px] text-[var(--gv-text-muted)] font-medium">⌘K</span>
+            <span className="font-mono text-[10px] text-[var(--gv-text-muted)] px-1.5 py-0.5 rounded bg-[var(--gv-surface-base)] border border-[var(--gv-border-subtle)] font-medium">⌘K</span>
           </button>
         )}
 
-        {/* Quick Theme Toggle */}
+        {/* Quick Theme Toggle — 36px hit target */}
         <button
           type="button"
           onClick={toggle}
-          className="p-1.5 rounded-lg text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] transition cursor-pointer"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] bg-[var(--gv-surface-raised)]/70 hover:bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] transition cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)]"
           title={`Active theme: ${theme}. Click to switch.`}
           aria-label={`Switch theme (currently ${theme})`}
         >
@@ -135,14 +135,14 @@ export const Topbar: React.FC<TopbarProps> = ({
           )}
         </button>
 
-        {/* Context Rail Open/Close Toggle */}
+        {/* Context Rail Open/Close Toggle — 36px hit target */}
         <button
           type="button"
           onClick={onToggleRail}
-          className={`p-1.5 rounded-lg border transition cursor-pointer ${
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)] ${
             isRailOpen
-              ? 'bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)] border-[var(--gv-border-strong)] shadow-2xs'
-              : 'text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-raised)] border-[var(--gv-border-subtle)]'
+              ? 'bg-[var(--gv-accent-muted)] text-[var(--gv-accent)] border border-[var(--gv-accent-border)] shadow-xs'
+              : 'text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] bg-[var(--gv-surface-raised)]/70 hover:bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'
           }`}
           title={isRailOpen ? 'Close context rail' : 'Open context rail'}
           aria-label={isRailOpen ? 'Close context rail' : 'Open context rail'}
@@ -151,21 +151,21 @@ export const Topbar: React.FC<TopbarProps> = ({
           <PanelRight className="w-4 h-4 text-[var(--gv-accent)]" />
         </button>
 
-        {/* Mobile Profile Trigger (Visible only on mobile) */}
+        {/* Mobile Profile Trigger (Visible only on mobile) — 36px hit target */}
         <button
           type="button"
           onClick={onOpenProfile}
-          className="md:hidden p-1 rounded-full border border-[var(--gv-border-subtle)] hover:border-[var(--gv-border-strong)] transition cursor-pointer"
+          className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center border border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] bg-[var(--gv-surface-raised)]/70 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)]"
           aria-label="Open profile settings"
         >
           {photoURL ? (
             <img
               src={photoURL}
               alt={displayName}
-              className="w-5 h-5 rounded-full object-cover"
+              className="w-6 h-6 rounded-full object-cover"
             />
           ) : (
-            <div className="w-5 h-5 rounded-full bg-[var(--gv-accent-muted)] text-[var(--gv-accent)] text-[10px] font-medium flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full bg-[var(--gv-accent-muted)] text-[var(--gv-accent)] text-[10px] font-medium flex items-center justify-center">
               {initial}
             </div>
           )}

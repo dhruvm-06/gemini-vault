@@ -15,6 +15,7 @@ import {
   Bell,
   Clock,
   MapPin,
+  Maximize2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { JournalSession, JournalMessage, ContextRailItem, LocationContext } from '../types';
@@ -61,6 +62,7 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
   onOpenConcludeModal,
   onEnterVoiceMode,
 }) => {
+  const { userProfile, updatePreferences } = useAuth();
   const isContinued = Boolean(session?.continuedFromSessionId);
 
   return (
@@ -69,7 +71,7 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="p-1.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] transition cursor-pointer shrink-0"
+          className="h-9 w-9 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] flex items-center justify-center transition cursor-pointer shrink-0"
           aria-label="Back to Reflections"
           title="Back to Reflections"
         >
@@ -82,7 +84,7 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
               type="text"
               value={editTitleValue}
               onChange={(e) => onTitleChange(e.target.value)}
-              className="px-2.5 py-1 rounded-lg bg-[var(--gv-surface-raised)] border border-[var(--gv-accent)] text-[var(--gv-text-primary)] text-sm focus:outline-none font-medium min-w-[200px]"
+              className="px-2.5 py-1.5 rounded-lg bg-[var(--gv-surface-raised)] border border-[var(--gv-accent)] text-[var(--gv-text-primary)] text-sm focus:outline-none font-medium min-w-[200px]"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') onSaveTitle();
@@ -93,7 +95,7 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
             <button
               type="button"
               onClick={onSaveTitle}
-              className="p-1 rounded-md bg-[var(--gv-accent)] text-white hover:opacity-90 transition cursor-pointer"
+              className="p-1.5 rounded-md bg-[var(--gv-accent)] text-white hover:opacity-90 transition cursor-pointer"
               aria-label="Save title"
             >
               <Check className="w-3.5 h-3.5" />
@@ -101,7 +103,7 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
             <button
               type="button"
               onClick={onCancelEditTitle}
-              className="p-1 rounded-md bg-[var(--gv-surface-raised)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+              className="p-1.5 rounded-md bg-[var(--gv-surface-raised)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
               aria-label="Cancel editing"
             >
               <X className="w-3.5 h-3.5" />
@@ -137,29 +139,71 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <div className="hidden md:flex items-center gap-1 text-[11px] text-[var(--gv-text-tertiary)] px-2 py-0.5 rounded-md bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)]">
+        {/* Companion Tone & Depth Contextual Selectors */}
+        <div className="hidden lg:flex items-center gap-1.5 text-xs text-[var(--gv-text-secondary)] border border-[var(--gv-border-subtle)] rounded-xl px-2.5 h-9 bg-[var(--gv-surface-ground)]">
+          <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Tone</span>
+          <select
+            value={userProfile?.preferences?.conversationTone || 'empathic'}
+            onChange={(e) => void updatePreferences({ conversationTone: e.target.value as any })}
+            className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
+            title="Companion reflection tone"
+            aria-label="Companion reflection tone"
+          >
+            <option value="empathic" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Empathic</option>
+            <option value="direct" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Direct</option>
+            <option value="philosophical" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Philosophical</option>
+          </select>
+          <span className="text-[var(--gv-border-strong)]">|</span>
+          <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Depth</span>
+          <select
+            value={userProfile?.preferences?.reflectionDepth || 'balanced'}
+            onChange={(e) => void updatePreferences({ reflectionDepth: e.target.value as any })}
+            className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
+            title="Companion reflection depth"
+            aria-label="Companion reflection depth"
+          >
+            <option value="concise" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Concise</option>
+            <option value="balanced" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Balanced</option>
+            <option value="deep" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Deep</option>
+          </select>
+        </div>
+
+        <div className="hidden md:flex items-center gap-1 text-[11px] text-[var(--gv-text-tertiary)] px-2.5 h-9 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)]">
           <Lock className="w-2.5 h-2.5 text-[var(--gv-accent)]" />
           <span>Private Vault</span>
         </div>
 
         {isCompleted ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--gv-success-muted)] border border-[var(--gv-success-border)] text-[var(--gv-success)] text-[11px] font-sans font-medium">
-            <CheckCircle2 className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1.5 px-3 h-9 rounded-xl bg-[var(--gv-success-muted)] border border-[var(--gv-success-border)] text-[var(--gv-success)] text-xs font-sans font-medium">
+            <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Concluded</span>
           </span>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] text-[11px] font-sans font-medium">
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 h-9 rounded-xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] text-xs font-sans font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse"></span>
               <span>Active</span>
             </span>
+
+            {/* Focus Mode 36px Discoverable Button */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('gv-toggle-focus-mode'))}
+              id="enter-focus-mode-btn"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95"
+              title="Focus Mode (⇧⌘F / Ctrl+Shift+F)"
+              aria-label="Focus Mode (⇧⌘F / Ctrl+Shift+F)"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-[var(--gv-accent)]" />
+              <span className="hidden sm:inline">Focus</span>
+            </button>
 
             {onEnterVoiceMode && (
               <button
                 type="button"
                 onClick={onEnterVoiceMode}
                 id="enter-voice-mode-btn"
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs"
+                className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs active:scale-95"
                 title="Enter Voice Reflection Studio"
                 aria-label="Enter Voice Reflection Studio"
               >
@@ -172,7 +216,7 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
               type="button"
               onClick={onOpenConcludeModal}
               id="conclude-reflection-btn"
-              className="px-3 py-1 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs"
+              className="h-9 px-3.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs active:scale-95"
             >
               Conclude
             </button>
@@ -358,6 +402,8 @@ interface ReflectComposerProps {
   onCaptureLocation?: () => void;
   onRemoveLocation?: () => void;
   isLocating?: boolean;
+  locationError?: string | null;
+  onDismissLocationError?: () => void;
 }
 
 export const ReflectComposer: React.FC<ReflectComposerProps> = ({
@@ -374,6 +420,8 @@ export const ReflectComposer: React.FC<ReflectComposerProps> = ({
   onCaptureLocation,
   onRemoveLocation,
   isLocating,
+  locationError,
+  onDismissLocationError,
 }) => {
   if (isCompleted) {
     return (
@@ -407,16 +455,38 @@ export const ReflectComposer: React.FC<ReflectComposerProps> = ({
 
   return (
     <div className="space-y-2">
+      {/* Active Location Chip (One-click removal) */}
       {locationContext && (
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[var(--gv-accent-muted)]/30 border border-[var(--gv-accent-border)] text-[11px] text-[var(--gv-accent-text)] max-w-fit">
-          <MapPin className="w-3 h-3 shrink-0" />
-          <span>{locationContext.label}</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 min-h-[36px] rounded-xl bg-[var(--gv-accent-muted)]/40 border border-[var(--gv-accent-border)] text-xs text-[var(--gv-text-primary)] max-w-fit animate-in fade-in duration-150">
+          <MapPin className="w-3.5 h-3.5 text-[var(--gv-accent)] shrink-0" />
+          <span className="font-medium">Location added · {locationContext.label}</span>
           {onRemoveLocation && (
             <button
               type="button"
               onClick={onRemoveLocation}
-              className="p-0.5 hover:text-[var(--gv-text-primary)] rounded transition cursor-pointer ml-1"
+              className="p-1 hover:text-rose-400 hover:bg-[var(--gv-surface-raised)] rounded-md transition cursor-pointer ml-1 text-[var(--gv-text-tertiary)]"
               aria-label="Remove location"
+              title="Remove location context"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Calm non-blocking failure notice */}
+      {locationError && (
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)] text-[11px] text-[var(--gv-text-tertiary)] animate-in fade-in duration-150">
+          <div className="flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 text-[var(--gv-accent-gold)] shrink-0" />
+            <span>{locationError}</span>
+          </div>
+          {onDismissLocationError && (
+            <button
+              type="button"
+              onClick={onDismissLocationError}
+              className="p-1 hover:text-[var(--gv-text-primary)] text-xs cursor-pointer"
+              aria-label="Dismiss message"
             >
               <X className="w-3 h-3" />
             </button>
@@ -474,11 +544,11 @@ export const ReflectComposer: React.FC<ReflectComposerProps> = ({
               type="button"
               onClick={onCaptureLocation}
               disabled={isLocating || isSending}
-              className="inline-flex items-center gap-1 text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-xl text-xs text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-raised)] transition cursor-pointer disabled:opacity-50"
               title="Add single-shot location context to reflection"
             >
-              <MapPin className="w-3 h-3 text-[var(--gv-accent-gold)]" />
-              <span>{isLocating ? 'Locating…' : 'Add location'}</span>
+              <MapPin className="w-3.5 h-3.5 text-[var(--gv-accent-gold)]" />
+              <span>{isLocating ? 'Locating…' : '+ Add location'}</span>
             </button>
           )}
         </div>
@@ -510,10 +580,11 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   const [studioMode, setStudioMode] = useState<'text' | 'voice'>(initialMode);
   const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
   const [isLocating, setIsLocating] = useState<boolean>(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const handleCaptureLocation = () => {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
+      setLocationError('Location access not available — continuing without location.');
       return;
     }
 
@@ -521,6 +592,7 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
     const isPrecise = preferredMode === 'precise';
 
     setIsLocating(true);
+    setLocationError(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setIsLocating(false);
@@ -546,6 +618,7 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
       (err) => {
         setIsLocating(false);
         console.warn('[LocationContext] Geolocation request denied or unavailable:', err);
+        setLocationError('Location access not available — continuing without location.');
       },
       {
         enableHighAccuracy: isPrecise,
@@ -1248,6 +1321,8 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
             onCaptureLocation={handleCaptureLocation}
             onRemoveLocation={() => setLocationContext(null)}
             isLocating={isLocating}
+            locationError={locationError}
+            onDismissLocationError={() => setLocationError(null)}
           />
         </div>
       </footer>

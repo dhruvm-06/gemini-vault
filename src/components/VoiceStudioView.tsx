@@ -81,6 +81,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
   });
 
   const transcriptScrollRef = useRef<HTMLDivElement>(null);
+  const isUserScrolledUpRef = useRef(false);
 
   // Auto-start voice session on mount
   useEffect(() => {
@@ -90,9 +91,16 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
     };
   }, [start, stop]);
 
-  // Auto-scroll transcript on new interim or persisted text
+  const handleTranscriptScroll = () => {
+    if (!transcriptScrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = transcriptScrollRef.current;
+    // Consider scrolled up if user is more than 40px away from the bottom
+    isUserScrolledUpRef.current = scrollHeight - (scrollTop + clientHeight) > 40;
+  };
+
+  // Smart auto-scroll: only scroll to bottom if user is already at or near bottom
   useEffect(() => {
-    if (transcriptScrollRef.current) {
+    if (transcriptScrollRef.current && !isUserScrolledUpRef.current) {
       transcriptScrollRef.current.scrollTop = transcriptScrollRef.current.scrollHeight;
     }
   }, [interimAssistantText, interimUserText, messages.length]);
@@ -245,10 +253,11 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
           </div>
         </div>
 
-        {/* Rolling Live Transcript Stream (Editorial Layout) */}
+        {/* Rolling Live Transcript Stream (Editorial Layout bounded to 28vh) */}
         <div
           ref={transcriptScrollRef}
-          className="w-full max-h-48 sm:max-h-60 overflow-y-auto px-5 py-4 rounded-2xl bg-[var(--gv-surface-base)]/75 border border-[var(--gv-border-subtle)] backdrop-blur-sm space-y-3.5 font-sans scroll-smooth"
+          onScroll={handleTranscriptScroll}
+          className="w-full max-h-[28vh] overflow-y-auto px-5 py-4 rounded-2xl bg-[var(--gv-surface-base)]/75 border border-[var(--gv-border-subtle)] backdrop-blur-sm space-y-3.5 font-sans scroll-smooth mt-4 shrink-0 overscroll-contain"
           aria-live="polite"
         >
           {recentTurns.length === 0 && !interimUserText && !interimAssistantText ? (

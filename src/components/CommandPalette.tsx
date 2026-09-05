@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Search,
   Compass,
@@ -66,6 +66,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
+  const navigationSourceRef = useRef<'keyboard' | 'mouse'>('keyboard');
 
   // Define commands catalog
   const commands: CommandItem[] = useMemo(() => {
@@ -296,12 +297,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
         if (e.key === 'ArrowDown') {
           e.preventDefault();
+          navigationSourceRef.current = 'keyboard';
           setSelectedIndex((prev) => (filteredCommands.length ? (prev + 1) % filteredCommands.length : 0));
           return;
         }
 
         if (e.key === 'ArrowUp') {
           e.preventDefault();
+          navigationSourceRef.current = 'keyboard';
           setSelectedIndex((prev) =>
             filteredCommands.length ? (prev - 1 + filteredCommands.length) % filteredCommands.length : 0
           );
@@ -338,9 +341,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
   }, [isOpen]);
 
-  // Auto-scroll highlighted command into view
+  // Auto-scroll highlighted command into view ONLY when navigating via keyboard
   useEffect(() => {
-    if (listRef.current) {
+    if (navigationSourceRef.current === 'keyboard' && listRef.current) {
       const activeEl = listRef.current.querySelector<HTMLElement>('[data-selected="true"]');
       if (activeEl) {
         activeEl.scrollIntoView({ block: 'nearest' });
@@ -403,7 +406,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           ref={listRef}
           id="command-palette-listbox"
           role="listbox"
-          className="max-h-80 overflow-y-auto p-2 divide-y divide-[var(--gv-border-subtle)]/40"
+          className="max-h-80 overflow-y-auto p-2 divide-y divide-[var(--gv-border-subtle)]/40 overscroll-contain"
         >
           {filteredCommands.length === 0 ? (
             <div className="py-10 px-4 text-center">
@@ -430,7 +433,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                   aria-selected={isSelected}
                   data-selected={isSelected}
                   onClick={() => cmd.action()}
-                  onMouseEnter={() => setSelectedIndex(index)}
+                  onMouseMove={() => {
+                    navigationSourceRef.current = 'mouse';
+                    if (selectedIndex !== index) {
+                      setSelectedIndex(index);
+                    }
+                  }}
                   className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition select-none ${
                     isSelected
                       ? 'bg-[var(--gv-accent-muted)]/70 text-[var(--gv-text-primary)] border border-[var(--gv-accent-border)]'

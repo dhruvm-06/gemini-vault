@@ -785,3 +785,144 @@ test('Audio Playback Scheduling Invariant: Lookahead on new burst and seamless c
   assert(Math.abs(t4 - 9.54) < 1e-6, 'Next burst after silence must again apply 40ms lookahead cushion');
   assert(Math.abs(nextPlayTime - 9.64) < 1e-6);
 });
+
+test('Audio Playback PCM Alignment: Odd-byte chunk boundary preservation preserves 16-bit PCM alignment without byte-swapping', () => {
+  let remainderByte: number | null = null;
+
+  function processChunk(bytes: Uint8Array): Int16Array {
+    let allBytes: Uint8Array;
+    if (remainderByte !== null) {
+      allBytes = new Uint8Array(bytes.length + 1);
+      allBytes[0] = remainderByte;
+      allBytes.set(bytes, 1);
+      remainderByte = null;
+    } else {
+      allBytes = bytes;
+    }
+
+    if (allBytes.length % 2 !== 0) {
+      remainderByte = allBytes[allBytes.length - 1];
+      allBytes = allBytes.subarray(0, allBytes.length - 1);
+    }
+
+    if (allBytes.length === 0) return new Int16Array(0);
+
+    const copy = new Uint8Array(allBytes.length);
+    copy.set(allBytes);
+    return new Int16Array(copy.buffer, 0, allBytes.length / 2);
+  }
+
+  // Suppose we have two 16-bit PCM samples:
+  // Sample 0: 0x0100 = 256 (low byte 0x00, high byte 0x01)
+  // Sample 1: 0x0200 = 512 (low byte 0x00, high byte 0x02)
+  // Split across two WebSocket frames on an odd boundary:
+  // Chunk 1 has 3 bytes: [0x00, 0x01, 0x00]
+  // Chunk 2 has 1 byte:  [0x02]
+
+  const chunk1 = new Uint8Array([0x00, 0x01, 0x00]);
+  const out1 = processChunk(chunk1);
+  assert.strictEqual(out1.length, 1, 'Chunk 1 should yield exactly 1 complete 16-bit sample');
+  assert.strictEqual(out1[0], 256, 'Sample 0 must be exactly 256');
+  assert.strictEqual(remainderByte, 0x00, 'Remainder byte 0x00 must be held for next chunk');
+
+  const chunk2 = new Uint8Array([0x02]);
+  const out2 = processChunk(chunk2);
+  assert.strictEqual(out2.length, 1, 'Chunk 2 with remainder byte should yield 1 complete 16-bit sample');
+  assert.strictEqual(out2[0], 512, 'Sample 1 must be exactly 512 without byte swapping');
+  assert.strictEqual(remainderByte, null, 'Remainder byte must be cleared');
+});
+
+test('Audio Playback Scheduling: Minor jitter (<250ms) recovers immediately without 40ms silence gaps', () => {
+  let nextPlayTime = 0;
+
+  function schedulePcm(currentTime: number, duration: number) {
+    const jitterDelta = currentTime - nextPlayTime;
+    const isInitialBurst = nextPlayTime === 0 || jitterDelta > 0.25;
+    const isMinorJitter = !isInitialBurst && jitterDelta > 0;
+
+    let startTime: number;
+    if (isInitialBurst) {
+      startTime = currentTime + 0.04;
+    } else if (isMinorJitter) {
+      startTime = currentTime + 0.002;
+    } else {
+      startTime = nextPlayTime;
+    }
+
+    nextPlayTime = startTime + duration;
+    return { startTime, isInitialBurst, isMinorJitter };
+  }
+
+  // Initial burst from silence at t = 2.0
+  const r1 = schedulePcm(2.0, 0.1);
+  assert.strictEqual(r1.isInitialBurst, true);
+  assert(Math.abs(r1.startTime - 2.04) < 1e-6);
+
+  // Minor jitter: chunk arrives at t = 2.15 (10ms after chunk 1 finished)
+  const r2 = schedulePcm(2.15, 0.1);
+  assert.strictEqual(r2.isMinorJitter, true, 'Must detect as minor jitter underrun, NOT initial burst');
+  assert.strictEqual(r2.isInitialBurst, false);
+  assert(Math.abs(r2.startTime - 2.152) < 1e-6, 'Must resume within 2ms without injecting 40ms silence gap');
+
+  // Prolonged pause: user stops speaking for 1 second, next burst at t = 3.5
+  const r3 = schedulePcm(3.5, 0.1);
+  assert.strictEqual(r3.isInitialBurst, true, 'Prolonged pause (>250ms) correctly treated as initial burst');
+  assert(Math.abs(r3.startTime - 3.54) < 1e-6, 'Applies 40ms lookahead cushion');
+});
+
+test('Voice Live Assistant Stream Invariant: OutputTranscription is single authoritative stream without duplicate part.text', () => {
+  let hasOutputTranscription = false;
+  let accumulatedAssistantText = '';
+  let fallbackModelText = '';
+
+  function handleServerContent(serverContent: any) {
+    const outputTranscription = serverContent.outputTranscription || serverContent.output_transcription;
+    if (outputTranscription?.text) {
+      hasOutputTranscription = true;
+      accumulatedAssistantText += outputTranscription.text;
+    }
+
+    if (serverContent.modelTurn?.parts) {
+      for (const part of serverContent.modelTurn.parts) {
+        if (part.text) {
+          fallbackModelText += part.text;
+        }
+      }
+    }
+
+    if (serverContent.turnComplete) {
+      if (!hasOutputTranscription && fallbackModelText && accumulatedAssistantText.length === 0) {
+        accumulatedAssistantText = fallbackModelText;
+      }
+      fallbackModelText = '';
+      hasOutputTranscription = false;
+      const finalTurn = accumulatedAssistantText.trim();
+      accumulatedAssistantText = '';
+      return finalTurn;
+    }
+    return null;
+  }
+
+  // Chunk 1: Audio chunk arrives with part.text and synchronized outputTranscription
+  handleServerContent({
+    modelTurn: { parts: [{ inlineData: { data: 'PCM' } }, { text: 'Hello, what is on your mind?' }] },
+    outputTranscription: { text: 'Hello, what ' },
+  });
+
+  // Chunk 2: Audio chunk continues
+  handleServerContent({
+    modelTurn: { parts: [{ inlineData: { data: 'PCM' } }] },
+    outputTranscription: { text: 'is on your mind?' },
+  });
+
+  // Turn complete
+  const finalTurn = handleServerContent({
+    turnComplete: true,
+  });
+
+  assert.strictEqual(
+    finalTurn,
+    'Hello, what is on your mind?',
+    'Spoken outputTranscription must be authoritative and not duplicated with part.text'
+  );
+});

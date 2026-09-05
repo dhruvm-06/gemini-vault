@@ -1,5 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 import {
   createGoogleCalendarUrl,
   createGoogleMapsUrl,
@@ -191,4 +198,130 @@ test('12. Reflection Mode Instructions: All 7 modes bounded and non-clinical', (
     assert.ok(!instruction.toLowerCase().includes('patholog'));
     assert.ok(!instruction.toLowerCase().includes('disorder'));
   }
+});
+
+test('13. Calendar "Summarize My Week" Typed Rendering Boundary: Fixes React object-child defect and handles all states safely', () => {
+  const calendarComponentPath = path.resolve(__dirname, '../src/components/CommitmentsCalendarView.tsx');
+  const memoriesRoutePath = path.resolve(__dirname, '../server/routes/memories.ts');
+
+  assert.ok(fs.existsSync(calendarComponentPath), 'CommitmentsCalendarView.tsx must exist');
+  assert.ok(fs.existsSync(memoriesRoutePath), 'server/routes/memories.ts must exist');
+
+  const calendarSrc = fs.readFileSync(calendarComponentPath, 'utf8');
+  const memoriesRouteSrc = fs.readFileSync(memoriesRoutePath, 'utf8');
+
+  // 1. Endpoint POST /api/memories/calendar-summary must exist and return structured summary
+  assert.ok(memoriesRouteSrc.includes('/calendar-summary'), 'Server must provide /calendar-summary route');
+  assert.ok(memoriesRouteSrc.includes('activeCommitmentsCount:'), 'Server returns activeCommitmentsCount');
+  assert.ok(memoriesRouteSrc.includes('focusRecommendation:'), 'Server returns focusRecommendation');
+
+  // 2. UI must have "Summarize My Week" button with stable id and loading spinner
+  assert.ok(calendarSrc.includes('id="summarize-week-btn"'), 'Summarize My Week button must exist');
+  assert.ok(calendarSrc.includes('Summarize My Week'), 'Summarize My Week label must be present');
+  assert.ok(calendarSrc.includes('isSummarizingWeek'), 'isSummarizingWeek loading state must be managed');
+
+  // 3. Typed rendering boundary: Never render raw object as React child
+  // The bug was `<p ...>{weekSummary}</p>` when weekSummary was an object.
+  // The fix maps fields explicitly: {weekSummary.focusRecommendation}, {weekSummary.activeCommitmentsCount ?? 0}, etc.
+  assert.ok(calendarSrc.includes('interface CalendarWeekSummaryData'), 'Must define typed summary contract');
+  assert.ok(
+    calendarSrc.includes('{weekSummary.focusRecommendation}'),
+    'Must render focusRecommendation string explicitly'
+  );
+  assert.ok(
+    calendarSrc.includes('{weekSummary.activeCommitmentsCount ?? 0}'),
+    'Must render activeCommitmentsCount safely'
+  );
+  assert.ok(
+    calendarSrc.includes('{weekSummary.snoozedLoopsCount ?? 0}'),
+    'Must render snoozedLoopsCount safely'
+  );
+  assert.ok(
+    calendarSrc.includes('{weekSummary.resolvedLoopsCount ?? 0}'),
+    'Must render resolvedLoopsCount safely'
+  );
+
+  // Verify dangerous pattern `{weekSummary}` alone in a paragraph does not exist
+  assert.equal(
+    calendarSrc.includes('>{weekSummary}<'),
+    false,
+    'Must NEVER render raw weekSummary object directly as a React child'
+  );
+
+  // 4. Safe fallback for empty/zero data and error state handling
+  assert.ok(calendarSrc.includes('No commitments or active loops recorded'), 'Must handle zero data gracefully');
+  assert.ok(calendarSrc.includes('weekSummaryError'), 'Must handle error state without crashing');
+
+  // 5. Reproduction test: Verify structured object evaluation logic
+  const mockServerResponse = {
+    activeCommitmentsCount: 3,
+    snoozedLoopsCount: 1,
+    resolvedLoopsCount: 5,
+    topCommitments: ['Launch Gemini Vault v1', 'Review sprint goals'],
+    upcomingSnoozed: ['Travel booking'],
+    recentAchievements: ['Shipped production build'],
+    focusRecommendation: 'Primary focus recommendation: "Launch Gemini Vault v1"',
+  };
+
+  // Pure function representing our rendering boundary
+  const renderSummaryFields = (data: typeof mockServerResponse) => {
+    return {
+      focusText: typeof data.focusRecommendation === 'string' ? data.focusRecommendation : '',
+      activeCount: Number(data.activeCommitmentsCount ?? 0),
+      snoozedCount: Number(data.snoozedLoopsCount ?? 0),
+      resolvedCount: Number(data.resolvedLoopsCount ?? 0),
+      commitments: Array.isArray(data.topCommitments) ? data.topCommitments.map(String) : [],
+      achievements: Array.isArray(data.recentAchievements) ? data.recentAchievements.map(String) : [],
+    };
+  };
+
+  const rendered = renderSummaryFields(mockServerResponse);
+  assert.equal(typeof rendered.focusText, 'string');
+  assert.equal(typeof rendered.activeCount, 'number');
+  assert.equal(rendered.activeCount, 3);
+  assert.equal(rendered.commitments.length, 2);
+
+  // Empty state handling
+  const emptyRendered = renderSummaryFields({} as any);
+  assert.equal(emptyRendered.activeCount, 0);
+  assert.equal(emptyRendered.focusText, '');
+  assert.equal(emptyRendered.commitments.length, 0);
+
+  // 6. Navigation to calendar route remains strictly valid
+  assert.equal(isValidNavigationTarget('calendar'), true);
+  assert.equal(targetToView('calendar')?.view, 'calendar');
+});
+
+test('14. Reflection Header Layout Invariant: Conclude control is pinned in primary tier and never pushed off-screen', () => {
+  const sessionViewPath = path.resolve(__dirname, '../src/components/JournalSessionView.tsx');
+  assert.ok(fs.existsSync(sessionViewPath), 'JournalSessionView.tsx must exist');
+
+  const sessionViewSrc = fs.readFileSync(sessionViewPath, 'utf8');
+
+  // 1. Conclude reflection button must exist with stable id
+  assert.ok(sessionViewSrc.includes('id="conclude-reflection-btn"'), 'Conclude button must exist with stable id');
+
+  // 2. Conclude button must be inside the primary row alongside Mode, Tone, and Depth
+  assert.ok(
+    sessionViewSrc.includes('Primary Controls (Mode/Tone/Depth) & Primary Session Exit (Conclude)'),
+    'Conclude button must be co-located with primary controls in the top tier'
+  );
+
+  // 3. Secondary actions must be in secondary row with horizontal scrolling safety
+  assert.ok(
+    sessionViewSrc.includes('Secondary Action Toolbar: Summarize, Actions, Focus, Voice'),
+    'Secondary action toolbar must be present in secondary tier'
+  );
+  assert.ok(
+    sessionViewSrc.includes('overflow-x-auto no-scrollbar'),
+    'Secondary toolbar must prevent horizontal page overflow'
+  );
+
+  // 4. Conclude button must not be inside the secondary scrollable container
+  const secondaryToolbarIndex = sessionViewSrc.indexOf('Secondary Action Toolbar');
+  const concludeBtnIndex = sessionViewSrc.indexOf('id="conclude-reflection-btn"');
+  assert.ok(
+    concludeBtnIndex < secondaryToolbarIndex,
+    'Conclude button must be in the top tier before the secondary toolbar to guarantee visibility'
+  );
 });

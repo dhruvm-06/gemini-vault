@@ -80,149 +80,172 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
   const isContinued = Boolean(session?.continuedFromSessionId);
 
   return (
-    <header className="px-4 sm:px-6 py-3.5 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-surface-base)]/85 backdrop-blur-md flex items-center justify-between shrink-0 z-20 transition-colors">
-      <div className="flex items-center gap-3 min-w-0">
-        <button
-          type="button"
-          onClick={onBack}
-          className="h-9 w-9 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] flex items-center justify-center transition cursor-pointer shrink-0"
-          aria-label="Back to Reflections"
-          title="Back to Reflections"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
+    <header className="px-4 sm:px-6 py-2.5 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-surface-base)]/90 backdrop-blur-md flex flex-col gap-2 shrink-0 z-20 transition-colors">
+      {/* Primary Row: Identity, Session Mode/Tone/Depth, and Primary Session Action (Conclude) */}
+      <div className="flex items-center justify-between gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] flex items-center justify-center transition cursor-pointer shrink-0"
+            aria-label="Back to Reflections"
+            title="Back to Reflections"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
 
-        {isEditingTitle ? (
-          <div className="flex items-center gap-1.5 min-w-0">
-            <input
-              type="text"
-              value={editTitleValue}
-              onChange={(e) => onTitleChange(e.target.value)}
-              className="px-2.5 py-1.5 rounded-lg bg-[var(--gv-surface-raised)] border border-[var(--gv-accent)] text-[var(--gv-text-primary)] text-sm focus:outline-none font-medium min-w-[200px]"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onSaveTitle();
-                if (e.key === 'Escape') onCancelEditTitle();
-              }}
-              aria-label="Edit reflection title"
-            />
-            <button
-              type="button"
-              onClick={onSaveTitle}
-              className="p-1.5 rounded-md bg-[var(--gv-accent)] text-white hover:opacity-90 transition cursor-pointer"
-              aria-label="Save title"
-            >
-              <Check className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={onCancelEditTitle}
-              className="p-1.5 rounded-md bg-[var(--gv-surface-raised)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
-              aria-label="Cancel editing"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="font-serif text-sm sm:text-base font-medium text-[var(--gv-text-primary)] truncate max-w-xs sm:max-w-md md:max-w-lg">
-                {session?.title || 'Reflection Session'}
-              </h1>
-              {!isCompleted && (
-                <button
-                  type="button"
-                  onClick={onStartEditTitle}
-                  className="p-1 text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer shrink-0"
-                  aria-label="Edit title"
-                  title="Rename reflection"
-                >
-                  <Edit2 className="w-3 h-3" />
-                </button>
+          {isEditingTitle ? (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <input
+                type="text"
+                value={editTitleValue}
+                onChange={(e) => onTitleChange(e.target.value)}
+                className="px-2.5 py-1 rounded-lg bg-[var(--gv-surface-raised)] border border-[var(--gv-accent)] text-[var(--gv-text-primary)] text-sm focus:outline-none font-medium min-w-[160px] sm:min-w-[200px]"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onSaveTitle();
+                  if (e.key === 'Escape') onCancelEditTitle();
+                }}
+                aria-label="Edit reflection title"
+              />
+              <button
+                type="button"
+                onClick={onSaveTitle}
+                className="p-1.5 rounded-md bg-[var(--gv-accent)] text-white hover:opacity-90 transition cursor-pointer"
+                aria-label="Save title"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={onCancelEditTitle}
+                className="p-1.5 rounded-md bg-[var(--gv-surface-raised)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+                aria-label="Cancel editing"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="font-serif text-sm sm:text-base font-medium text-[var(--gv-text-primary)] truncate max-w-[150px] sm:max-w-xs md:max-w-sm lg:max-w-md">
+                  {session?.title || 'Reflection Session'}
+                </h1>
+                {!isCompleted && (
+                  <button
+                    type="button"
+                    onClick={onStartEditTitle}
+                    className="p-1 text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer shrink-0"
+                    aria-label="Edit title"
+                    title="Rename reflection"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {isContinued && (
+                <div className="flex items-center gap-1 text-[11px] text-[var(--gv-accent)] font-sans">
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  <span className="truncate">Continued from previous reflection</span>
+                </div>
               )}
             </div>
+          )}
+        </div>
 
-            {isContinued && (
-              <div className="flex items-center gap-1 text-[11px] text-[var(--gv-accent)] font-sans">
-                <RotateCcw className="w-2.5 h-2.5" />
-                <span className="truncate">Continued from previous reflection</span>
-              </div>
-            )}
+        {/* Primary Controls (Mode/Tone/Depth) & Primary Session Exit (Conclude) */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Companion Tone & Depth & Mode Contextual Selectors */}
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--gv-text-secondary)] border border-[var(--gv-border-subtle)] rounded-xl px-2.5 h-8.5 sm:h-9 bg-[var(--gv-surface-ground)]">
+            <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Mode</span>
+            <select
+              value={reflectionMode}
+              onChange={(e) => onReflectionModeChange(e.target.value as ReflectionMode)}
+              className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
+              title="Reflection Mode"
+              aria-label="Reflection Mode"
+            >
+              <option value="reflect" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Reflect</option>
+              <option value="deep_reflection" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Deep</option>
+              <option value="brainstorm" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Brainstorm</option>
+              <option value="reframe" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Reframe</option>
+              <option value="action_plan" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Action Plan</option>
+              <option value="gratitude" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Gratitude</option>
+              <option value="executive_summary" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Summary</option>
+            </select>
+            <span className="text-[var(--gv-border-strong)]">|</span>
+            <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Tone</span>
+            <select
+              value={userProfile?.preferences?.conversationTone || 'empathic'}
+              onChange={(e) => void updatePreferences({ conversationTone: e.target.value as any })}
+              className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
+              title="Companion reflection tone"
+              aria-label="Companion reflection tone"
+            >
+              <option value="empathic" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Empathic</option>
+              <option value="direct" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Direct</option>
+              <option value="philosophical" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Philosophical</option>
+            </select>
+            <span className="text-[var(--gv-border-strong)]">|</span>
+            <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Depth</span>
+            <select
+              value={userProfile?.preferences?.reflectionDepth || 'balanced'}
+              onChange={(e) => void updatePreferences({ reflectionDepth: e.target.value as any })}
+              className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
+              title="Companion reflection depth"
+              aria-label="Companion reflection depth"
+            >
+              <option value="concise" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Concise</option>
+              <option value="balanced" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Balanced</option>
+              <option value="deep" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Deep</option>
+            </select>
           </div>
-        )}
+
+          {/* Primary Exit: Conclude Button (or Concluded status) */}
+          {isCompleted ? (
+            <span className="inline-flex items-center gap-1.5 px-3 h-8.5 sm:h-9 rounded-xl bg-[var(--gv-success-muted)] border border-[var(--gv-success-border)] text-[var(--gv-success)] text-xs font-sans font-medium">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Concluded</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenConcludeModal}
+              id="conclude-reflection-btn"
+              className="h-8.5 sm:h-9 px-3.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:border-[var(--gv-border-accent)] text-xs font-sans font-medium border border-[var(--gv-border-strong)] transition cursor-pointer shadow-xs active:scale-95 shrink-0"
+              title="Conclude reflection and review memories"
+            >
+              Conclude
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Companion Tone & Depth & Mode Contextual Selectors */}
-        <div className="hidden lg:flex items-center gap-1.5 text-xs text-[var(--gv-text-secondary)] border border-[var(--gv-border-subtle)] rounded-xl px-2.5 h-9 bg-[var(--gv-surface-ground)]">
-          <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Mode</span>
-          <select
-            value={reflectionMode}
-            onChange={(e) => onReflectionModeChange(e.target.value as ReflectionMode)}
-            className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
-            title="Reflection Mode"
-            aria-label="Reflection Mode"
-          >
-            <option value="reflect" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Reflect</option>
-            <option value="deep_reflection" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Deep</option>
-            <option value="brainstorm" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Brainstorm</option>
-            <option value="reframe" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Reframe</option>
-            <option value="action_plan" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Action Plan</option>
-            <option value="gratitude" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Gratitude</option>
-            <option value="executive_summary" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Summary</option>
-          </select>
-          <span className="text-[var(--gv-border-strong)]">|</span>
-          <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Tone</span>
-          <select
-            value={userProfile?.preferences?.conversationTone || 'empathic'}
-            onChange={(e) => void updatePreferences({ conversationTone: e.target.value as any })}
-            className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
-            title="Companion reflection tone"
-            aria-label="Companion reflection tone"
-          >
-            <option value="empathic" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Empathic</option>
-            <option value="direct" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Direct</option>
-            <option value="philosophical" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Philosophical</option>
-          </select>
-          <span className="text-[var(--gv-border-strong)]">|</span>
-          <span className="text-[10px] uppercase font-semibold tracking-wider text-[var(--gv-text-tertiary)]">Depth</span>
-          <select
-            value={userProfile?.preferences?.reflectionDepth || 'balanced'}
-            onChange={(e) => void updatePreferences({ reflectionDepth: e.target.value as any })}
-            className="bg-transparent text-xs text-[var(--gv-text-primary)] focus:outline-none cursor-pointer py-0.5 font-medium"
-            title="Companion reflection depth"
-            aria-label="Companion reflection depth"
-          >
-            <option value="concise" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Concise</option>
-            <option value="balanced" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Balanced</option>
-            <option value="deep" className="bg-[var(--gv-surface-raised)] text-[var(--gv-text-primary)]">Deep</option>
-          </select>
-        </div>
-
-        <div className="hidden md:flex items-center gap-1 text-[11px] text-[var(--gv-text-tertiary)] px-2.5 h-9 rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)]">
-          <Lock className="w-2.5 h-2.5 text-[var(--gv-accent)]" />
-          <span>Private Vault</span>
-        </div>
-
-        {isCompleted ? (
-          <span className="inline-flex items-center gap-1.5 px-3 h-9 rounded-xl bg-[var(--gv-success-muted)] border border-[var(--gv-success-border)] text-[var(--gv-success)] text-xs font-sans font-medium">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Concluded</span>
-          </span>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 h-9 rounded-xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] text-xs font-sans font-medium">
+      {/* Secondary Row: Active State, Private Vault Badge, and Action Tools */}
+      {!isCompleted && (
+        <div className="flex items-center justify-between gap-2 min-w-0 pt-1.5 border-t border-[var(--gv-border-subtle)]/70">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] text-xs font-sans font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse"></span>
               <span>Active</span>
             </span>
 
+            <div className="hidden sm:flex items-center gap-1 text-[11px] text-[var(--gv-text-tertiary)] px-2.5 h-8 rounded-lg bg-[var(--gv-surface-ground)] border border-[var(--gv-border-subtle)]">
+              <Lock className="w-2.5 h-2.5 text-[var(--gv-accent)]" />
+              <span>Private Vault</span>
+            </div>
+          </div>
+
+          {/* Secondary Action Toolbar: Summarize, Actions, Focus, Voice */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 shrink-0">
             {onSummarize && (
               <button
                 type="button"
                 onClick={onSummarize}
                 disabled={isSummarizing}
                 id="summarize-reflection-btn"
-                className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
                 title="Summarize reflection takeaways"
                 aria-label="Summarize reflection takeaways"
               >
@@ -237,7 +260,7 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
                 onClick={onExtractActions}
                 disabled={isExtractingActions}
                 id="extract-actions-btn"
-                className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
                 title="Extract calendar commitments and actions"
                 aria-label="Extract calendar commitments and actions"
               >
@@ -246,17 +269,17 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
               </button>
             )}
 
-            {/* Focus Mode 36px Discoverable Button */}
+            {/* Focus Mode Button */}
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('gv-toggle-focus-mode'))}
               id="enter-focus-mode-btn"
-              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95"
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] hover:border-[var(--gv-border-accent)] transition cursor-pointer shadow-2xs active:scale-95"
               title="Focus Mode (⇧⌘F / Ctrl+Shift+F)"
               aria-label="Focus Mode (⇧⌘F / Ctrl+Shift+F)"
             >
               <Maximize2 className="w-3.5 h-3.5 text-[var(--gv-accent)]" />
-              <span className="hidden sm:inline">Focus</span>
+              <span>Focus</span>
             </button>
 
             {onEnterVoiceMode && (
@@ -264,26 +287,17 @@ export const ReflectHeader: React.FC<ReflectHeaderProps> = ({
                 type="button"
                 onClick={onEnterVoiceMode}
                 id="enter-voice-mode-btn"
-                className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs active:scale-95"
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs active:scale-95"
                 title="Enter Voice Reflection Studio"
                 aria-label="Enter Voice Reflection Studio"
               >
                 <VaultPresence size="micro" state="idle" />
-                <span className="hidden sm:inline">Voice</span>
+                <span>Voice</span>
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={onOpenConcludeModal}
-              id="conclude-reflection-btn"
-              className="h-9 px-3.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] text-xs font-sans font-medium border border-[var(--gv-border-default)] transition cursor-pointer shadow-2xs active:scale-95"
-            >
-              Conclude
-            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </header>
   );
 };

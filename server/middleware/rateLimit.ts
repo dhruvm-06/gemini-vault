@@ -129,3 +129,10 @@ export const signalsRateLimiter = createRateLimiter({
   endpointName: 'ai_signals',
   message: 'Vault Signals rate limit reached. Please wait a moment before refreshing signals.',
 });
+
+export const momentsRateLimiter = createRateLimiter({
+  windowMs: DEFAULT_WINDOW_MS,
+  max: Number(process.env.RATE_LIMIT_MOMENTS_MAX) || 15,
+  endpointName: 'ai_moments',
+  message: 'Moments synthesis rate limit reached. Please wait a moment before creating another moment.',
+});

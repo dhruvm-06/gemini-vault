@@ -112,6 +112,27 @@ service cloud.firestore {
         allow create, update: if false;
         allow delete: if isOwner(userId);
       }
+
+      // Documents & Document Chunks Subcollection (RAG / Document Intelligence)
+      match /documents/{documentId} {
+        allow read: if isOwner(userId);
+        // Documents are ingested, extracted, and indexed strictly by server Admin SDK
+        allow create, update: if false;
+        allow delete: if isOwner(userId);
+
+        match /chunks/{chunkId} {
+          allow read: if isOwner(userId);
+          allow write: if false; // strictly server Admin SDK
+        }
+      }
+
+      // Vault Moments Subcollection
+      match /moments/{momentId} {
+        allow read: if isOwner(userId);
+        // Moments are synthesized and written strictly by server Admin SDK
+        allow create, update: if false;
+        allow delete: if isOwner(userId);
+      }
     }
 
     // Default global deny

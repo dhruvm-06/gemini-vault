@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Mic, Bookmark, Brain, User } from 'lucide-react';
+import { Compass, Mic, Bookmark, Brain, User, Sparkles } from 'lucide-react';
 import { AppView } from '../types';
 
 interface MobileNavProps {
@@ -30,6 +30,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
     { key: 'home', label: 'Reflect', icon: Compass },
     { key: 'voice', label: 'Voice', icon: Mic },
     { key: 'vault', label: 'Vault', icon: Bookmark },
+    { key: 'moments', label: 'Moments', icon: Sparkles },
     { key: 'intelligence', label: 'Intel', icon: Brain },
   ];
 
@@ -39,7 +40,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Mobile Navigation"
     >
-      <div className="grid grid-cols-5 items-center px-1">
+      <div className="grid grid-cols-6 items-center px-1">
         {navItems.map(({ key, label, icon: Icon }) => {
           const isActive = currentView === key && !isProfileOpen;
           return (

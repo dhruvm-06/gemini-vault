@@ -1,6 +1,7 @@
 import React from 'react';
-import { Shield, Lock, CheckCircle2, Sun, Moon } from 'lucide-react';
+import { Lock, CheckCircle2, Sun, Moon } from 'lucide-react';
 import { VaultPresence } from './VaultPresence';
+import { VaultBrandMark } from './VaultBrandMark';
 import { useTheme } from '../context/ThemeContext';
 
 interface LandingPageProps {
@@ -24,8 +25,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <header className="h-18 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-surface-ground)]/90 backdrop-blur-md sticky top-0 z-30 transition-colors duration-200">
         <div className="max-w-5xl mx-auto h-full px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center text-[var(--gv-accent)]">
-              <Shield className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center">
+              <VaultBrandMark size={20} variant="gold" />
             </div>
             <span className="font-serif text-xl tracking-tight font-medium text-[var(--gv-text-primary)]">
               Gemini Vault
@@ -139,7 +140,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* Trust & Privacy Pillars */}
         <div className="mt-12 sm:mt-14 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-xs text-[var(--gv-text-tertiary)]">
           <div className="flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5 text-[var(--gv-accent)] shrink-0" />
+            <VaultBrandMark size={14} variant="gold" className="shrink-0" />
             <span>Private by design</span>
           </div>
           <div className="flex items-center gap-2">

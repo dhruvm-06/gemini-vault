@@ -6,9 +6,9 @@ import {
   onAuthStateChanged,
   AuthError,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
-import { UserProfile } from '../types';
+import { UserProfile, UserPreferences } from '../types';
 import { sanitizeFirestorePayload } from '../utils/sanitize';
 
 interface AuthContextType {
@@ -22,6 +22,7 @@ interface AuthContextType {
   signOutUser: () => Promise<void>;
   getIdToken: (forceRefresh?: boolean) => Promise<string | null>;
   refreshProfile: () => Promise<UserProfile | null>;
+  updatePreferences: (newPrefs: Partial<UserPreferences>) => Promise<boolean>;
   clearError: () => void;
   clearProfileError: () => void;
 }
@@ -198,6 +199,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   };
 
+  const updatePreferences = async (newPrefs: Partial<UserPreferences>): Promise<boolean> => {
+    if (!auth.currentUser) return false;
+    try {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      const mergedPreferences: UserPreferences = {
+        ...(userProfile?.preferences || {}),
+        ...newPrefs,
+      };
+      await updateDoc(userDocRef, {
+        preferences: sanitizeFirestorePayload(mergedPreferences),
+      });
+      setUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              preferences: mergedPreferences,
+            }
+          : null
+      );
+      return true;
+    } catch (err) {
+      console.error('[AuthContext] Failed to update preferences in Firestore:', err);
+      return false;
+    }
+  };
+
   const clearError = () => setError(null);
   const clearProfileError = () => setProfileError(null);
 
@@ -214,6 +241,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signOutUser,
         getIdToken,
         refreshProfile,
+        updatePreferences,
         clearError,
         clearProfileError,
       }}

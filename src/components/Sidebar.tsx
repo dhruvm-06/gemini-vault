@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Shield,
   Compass,
   Mic,
   Bookmark,
@@ -9,7 +8,9 @@ import {
   Calendar,
   Settings,
   LogOut,
+  Sparkles,
 } from 'lucide-react';
+import { VaultBrandMark } from './VaultBrandMark';
 import { AppView } from '../types';
 
 interface SidebarProps {
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'home', label: 'Reflect', icon: Compass },
   { key: 'voice', label: 'Voice', icon: Mic },
   { key: 'vault', label: 'Vault', icon: Bookmark },
+  { key: 'moments', label: 'Moments', icon: Sparkles },
   { key: 'intelligence', label: 'Intelligence', icon: Brain },
   { key: 'documents', label: 'Documents', icon: FileText },
   { key: 'calendar', label: 'Calendar', icon: Calendar },
@@ -65,8 +67,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => onNavigate('home')}
           className="flex items-center gap-2.5 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)] rounded-lg p-1 -m-1"
         >
-          <div className="w-7 h-7 rounded-lg bg-[var(--gv-accent-gold)]/15 border border-[var(--gv-accent-gold)]/30 text-[var(--gv-accent-gold)] flex items-center justify-center transition group-hover:scale-105">
-            <Shield className="w-3.5 h-3.5" />
+          <div className="w-7 h-7 rounded-lg bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/25 flex items-center justify-center transition group-hover:scale-105">
+            <VaultBrandMark size={18} variant="gold" />
           </div>
           <div className="flex flex-col text-left">
             <span className="font-serif text-base tracking-tight font-medium text-white">

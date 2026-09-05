@@ -11,7 +11,7 @@ const inline = (text: string, keyPrefix: string) => {
           (part.startsWith('__') && part.endsWith('__'))
         ) {
           return (
-            <strong key={key} className="font-semibold text-stone-100">
+            <strong key={key} className="font-semibold text-[var(--gv-text-primary)]">
               {part.slice(2, -2)}
             </strong>
           );
@@ -20,7 +20,7 @@ const inline = (text: string, keyPrefix: string) => {
           return (
             <code
               key={key}
-              className="rounded bg-stone-900 border border-stone-800 px-1.5 py-0.5 font-mono text-[0.9em] text-amber-200"
+              className="rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-default)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--gv-accent-text)]"
             >
               {part.slice(1, -1)}
             </code>
@@ -102,9 +102,9 @@ export const FormattedResponse: React.FC<{
         nodes.push(
           <pre
             key={`code-${idx++}`}
-            className="mb-3 overflow-x-auto rounded-xl bg-stone-950 border border-stone-800 p-4 text-xs leading-relaxed"
+            className="mb-3 overflow-x-auto rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] p-4 text-xs leading-relaxed"
           >
-            <code className="font-mono text-stone-300 whitespace-pre">
+            <code className="font-mono text-[var(--gv-text-primary)] whitespace-pre">
               {codeLines.join('\n')}
             </code>
           </pre>
@@ -132,12 +132,12 @@ export const FormattedResponse: React.FC<{
       const Tag = (`h${level}` as 'h1' | 'h2' | 'h3' | 'h4');
       const cls =
         level === 1
-          ? 'text-xl font-semibold text-stone-100 mb-3'
+          ? 'text-xl font-serif font-semibold text-[var(--gv-text-primary)] mb-3'
           : level === 2
-          ? 'text-lg font-semibold text-stone-100 mb-2.5'
+          ? 'text-lg font-serif font-semibold text-[var(--gv-text-primary)] mb-2.5'
           : level === 3
-          ? 'text-base font-semibold text-stone-100 mb-2'
-          : 'text-sm font-semibold text-stone-200 mb-2';
+          ? 'text-base font-serif font-semibold text-[var(--gv-text-primary)] mb-2'
+          : 'text-sm font-sans font-semibold text-[var(--gv-text-secondary)] mb-2';
       nodes.push(
         React.createElement(
           Tag,
@@ -154,7 +154,7 @@ export const FormattedResponse: React.FC<{
       nodes.push(
         <blockquote
           key={`quote-${idx++}`}
-          className="border-l-2 border-amber-500/50 pl-4 mb-3 text-stone-400 italic"
+          className="border-l-2 border-[var(--gv-accent-border)] pl-4 mb-3 text-[var(--gv-text-secondary)] italic"
         >
           {inline(quote[1], `q-${lineIndex}`)}
         </blockquote>
@@ -185,9 +185,9 @@ export const FormattedResponse: React.FC<{
     nodes.push(
       <pre
         key={`code-${idx++}`}
-        className="mb-3 overflow-x-auto rounded-xl bg-stone-950 border border-stone-800 p-4 text-xs leading-relaxed"
+        className="mb-3 overflow-x-auto rounded-xl bg-[var(--gv-surface-ground)] border border-[var(--gv-border-default)] p-4 text-xs leading-relaxed"
       >
-        <code className="font-mono text-stone-300 whitespace-pre">
+        <code className="font-mono text-[var(--gv-text-primary)] whitespace-pre">
           {codeLines.join('\n')}
         </code>
       </pre>

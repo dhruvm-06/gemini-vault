@@ -1,5 +1,6 @@
 import React from 'react';
-import { Shield, Home, Vault, Brain, Sun, Moon, LogOut, Search } from 'lucide-react';
+import { Home, Vault, Brain, Sun, Moon, LogOut, Search, Sparkles, FileText } from 'lucide-react';
+import { VaultBrandMark } from './VaultBrandMark';
 import { AppView } from '../types';
 import { useTheme } from '../context/ThemeContext';
 
@@ -19,7 +20,9 @@ interface DesktopNavProps {
 const NAV_ITEMS: { key: AppView; label: string; icon: React.FC<{ className?: string }> }[] = [
   { key: 'home', label: 'Reflect', icon: Home },
   { key: 'vault', label: 'Vault', icon: Vault },
+  { key: 'moments', label: 'Moments', icon: Sparkles },
   { key: 'intelligence', label: 'Intelligence', icon: Brain },
+  { key: 'documents', label: 'Documents', icon: FileText },
 ];
 
 export const DesktopNav: React.FC<DesktopNavProps> = ({
@@ -46,8 +49,8 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
             onClick={() => onNavigate('home')}
             className="flex items-center gap-2.5 shrink-0 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-focus-ring)] rounded-lg p-1 -m-1"
           >
-            <div className="w-8 h-8 rounded-lg bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] flex items-center justify-center transition group-hover:scale-105">
-              <Shield className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center transition group-hover:scale-105">
+              <VaultBrandMark size={20} variant="gold" />
             </div>
             <div className="flex flex-col text-left">
               <span className="font-serif text-lg leading-tight font-medium text-[var(--gv-text-primary)]">

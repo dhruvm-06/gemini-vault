@@ -1,0 +1,17 @@
+{
+  "name": "Gemini Vault",
+  "short_name": "Vault",
+  "description": "Privacy-first personal AI reflection workspace with memory synthesis and longitudinal provenance.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0a09",
+  "theme_color": "#0c0a09",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

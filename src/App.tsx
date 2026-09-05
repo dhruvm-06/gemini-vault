@@ -1,16 +1,19 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Shield, Mic, FileText, Calendar, Compass, ArrowRight, Sparkles } from 'lucide-react';
+import { Mic, FileText, Calendar, Compass, ArrowRight, Sparkles } from 'lucide-react';
+import { VaultBrandMark } from './components/VaultBrandMark';
 import { useAuth } from './context/AuthContext';
 import { JournalHome } from './components/JournalHome';
 import { JournalSessionView } from './components/JournalSessionView';
 import { VaultDashboard } from './components/VaultDashboard';
 import { IntelligenceDashboard } from './components/IntelligenceDashboard';
+import { DocumentsStudio } from './components/DocumentsStudio';
+import { VaultMomentsView } from './components/VaultMomentsView';
 import { AppShell } from './components/AppShell';
 import { LandingPage } from './components/LandingPage';
 import { AppView, ContextRailItem } from './types';
 import { VaultPresence } from './components/VaultPresence';
 
-const VALID_VIEWS: AppView[] = ['home', 'voice', 'vault', 'intelligence', 'documents', 'calendar'];
+const VALID_VIEWS: AppView[] = ['home', 'voice', 'vault', 'intelligence', 'documents', 'calendar', 'moments'];
 
 function parseViewFromParam(param: string | null): AppView {
   if (param && (VALID_VIEWS as string[]).includes(param)) {
@@ -73,6 +76,7 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete('session');
     url.searchParams.delete('mode');
+    url.searchParams.delete('turn');
     url.searchParams.set('view', nextView);
     window.history.pushState({ view: nextView }, '', `${url.pathname}${url.search}${url.hash}`);
   };
@@ -80,7 +84,8 @@ export default function App() {
   const openSession = (
     sessionId: string,
     initialPrompt?: string,
-    initialMode: 'text' | 'voice' = 'text'
+    initialMode: 'text' | 'voice' = 'text',
+    turnId?: string
   ) => {
     setNavigationError(null);
     setInitialPromptForSession(initialPrompt);
@@ -88,6 +93,11 @@ export default function App() {
     setActiveSessionId(sessionId);
     const url = new URL(window.location.href);
     url.searchParams.set('session', sessionId);
+    if (turnId) {
+      url.searchParams.set('turn', turnId);
+    } else {
+      url.searchParams.delete('turn');
+    }
     if (initialMode === 'voice') {
       url.searchParams.set('mode', 'voice');
     } else {
@@ -95,7 +105,7 @@ export default function App() {
     }
     url.searchParams.delete('view');
     window.history.pushState(
-      { session: sessionId, returnView: view, mode: initialMode },
+      { session: sessionId, returnView: view, mode: initialMode, turn: turnId },
       '',
       `${url.pathname}${url.search}${url.hash}`
     );
@@ -322,7 +332,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-[var(--gv-surface-ground)] text-[var(--gv-text-primary)] flex items-center justify-center transition-colors duration-200">
         <div className="text-center">
-          <Shield className="w-7 h-7 text-[var(--gv-accent)] mx-auto animate-pulse" />
+          <VaultBrandMark size={32} variant="gold" animate className="mx-auto" />
           <h2 className="mt-4 text-lg font-serif">Opening Gemini Vault</h2>
           <p className="mt-1 text-xs text-[var(--gv-text-tertiary)]">Authenticating your private space…</p>
         </div>
@@ -352,6 +362,7 @@ export default function App() {
       onDismissError={() => setNavigationError(null)}
       contextItems={contextItems}
       onOpenSession={openSession}
+      onStartNewReflection={() => void startSession()}
     >
       {activeSessionId ? (
         <JournalSessionView
@@ -415,31 +426,10 @@ export default function App() {
             </button>
           </div>
         </div>
+      ) : view === 'moments' ? (
+        <VaultMomentsView onOpenSession={openSession} />
       ) : view === 'documents' ? (
-        <div className="min-h-[calc(100vh-3rem)] flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
-          <div className="w-14 h-14 rounded-2xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] flex items-center justify-center mb-5">
-            <FileText className="w-7 h-7" />
-          </div>
-          <span className="text-[11px] font-medium tracking-widest uppercase text-[var(--gv-accent-gold)] px-3 py-1 rounded-full bg-[var(--gv-accent-gold)]/10 border border-[var(--gv-accent-gold)]/30">
-            Source Grounding
-          </span>
-          <h2 className="font-serif text-2xl sm:text-3xl text-[var(--gv-text-primary)] mt-4 font-medium">
-            Documents & Grounding
-          </h2>
-          <p className="mt-3 text-sm text-[var(--gv-text-secondary)] leading-relaxed">
-            Upload and ground your reflections in personal notes, PDFs, essays, and reading journals with strict semantic citations.
-          </p>
-          <div className="mt-8 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('vault')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-surface-raised)] border border-[var(--gv-border-strong)] text-[var(--gv-text-primary)] text-xs font-medium hover:bg-[var(--gv-surface-raised)]/80 transition cursor-pointer"
-            >
-              <span>Explore Vault Memories</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        <DocumentsStudio onNavigate={navigate} />
       ) : view === 'calendar' ? (
         <div className="min-h-[calc(100vh-3rem)] flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
           <div className="w-14 h-14 rounded-2xl bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] flex items-center justify-center mb-5">

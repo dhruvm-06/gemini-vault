@@ -7,7 +7,8 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx tests/voiceSessionLifecycle.test.ts && tsx --test tests/askVaultIntelligence.test.ts && tsx --test tests/documentIntelligence.test.ts && tsx --test tests/finalProductEnhancements.test.ts && tsx --test tests/exportAndPalette.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
@@ -17,6 +18,8 @@
     "firebase": "^12.18.0",
     "firebase-admin": "^14.3.0",
     "lucide-react": "^1.38.0",
+    "multer": "^2.3.0",
+    "pdf-parse": "^2.4.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwind-merge": "^3.6.0",
@@ -26,7 +29,9 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
     "@types/node": "^26.4.0",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@types/ws": "^8.18.1",

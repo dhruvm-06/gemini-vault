@@ -1,6 +1,20 @@
 export interface UserPreferences {
-  theme?: 'dark' | 'light' | 'system';
+  theme?: 'dark' | 'light' | 'system' | 'night' | 'morning';
   reflectionReminder?: boolean;
+  reflectionDepth?: 'concise' | 'balanced' | 'deep';
+  conversationTone?: 'empathic' | 'direct' | 'philosophical';
+  memorySuggestions?: boolean;
+  evidenceVisibility?: 'expanded' | 'collapsed';
+  defaultLocationMode?: 'none' | 'coarse' | 'precise';
+  contextRailDefault?: 'open' | 'closed';
+}
+
+export interface LocationContext {
+  mode: 'coarse' | 'precise';
+  label: string;
+  latitude?: number;
+  longitude?: number;
+  capturedAt: string;
 }
 
 export interface UserProfile {
@@ -127,6 +141,11 @@ export interface VoiceServerSessionWarningMessage {
   minutesRemaining: number;
 }
 
+export interface VoiceServerSessionTitledMessage {
+  type: 'session_titled';
+  title: string;
+}
+
 export interface VoiceServerErrorMessage {
   type: 'error';
   code: string;
@@ -144,6 +163,7 @@ export type VoiceServerMessage =
   | VoiceServerInterruptedMessage
   | VoiceServerSessionConcludedMessage
   | VoiceServerSessionWarningMessage
+  | VoiceServerSessionTitledMessage
   | VoiceServerErrorMessage;
 
 export interface JournalSession {
@@ -182,6 +202,14 @@ export type MemoryCategory =
   | 'recurring_theme'
   | 'commitment';
 
+export interface MemoryEvolutionRecord {
+  timestamp: string;
+  sessionId: string;
+  messageId?: string;
+  previousFact: string;
+  changeNote?: string;
+}
+
 export interface Memory {
   id: string;
   userId: string;
@@ -189,10 +217,33 @@ export interface Memory {
   category: MemoryCategory;
   userNotes?: string;
   confidence: number;
-  sourceSessionId: string;
+  sourceSessionId: string | null;
   extractedBy: string;
   createdAt: unknown;
   isActive: boolean;
+  sourceType?: 'extracted' | 'manual';
+
+  // Phase D Provenance Extensions
+  sourceMessageId?: string | null;
+  sourceSnippet?: string | null;
+  turnTimestamp?: string | null;
+  sourceModality?: 'text' | 'voice' | null;
+
+  // Phase D Evolution & Arbitration Extensions
+  evolutionStatus?: 'active' | 'reinforced' | 'evolved' | 'superseded';
+  supersedesMemoryId?: string | null;
+  supersededByMemoryId?: string | null;
+  evolutionHistory?: MemoryEvolutionRecord[];
+
+  // Scoring & Loop Extensions
+  loopStatus?: 'open' | 'snoozed' | 'resolved';
+  snoozedUntil?: string | null;
+  resolvedAt?: unknown;
+  importance?: number;
+  referenceCount?: number;
+  lastReferencedAt?: unknown;
+  memoryStatus?: 'active' | 'archived';
+  updatedAt?: unknown;
 }
 
 export interface MemoryCandidate {
@@ -203,6 +254,17 @@ export interface MemoryCandidate {
   confidence: number;
   sourceSessionId: string;
   isSaved?: boolean;
+
+  // Provenance
+  sourceMessageId?: string;
+  sourceSnippet?: string;
+  turnTimestamp?: string;
+  sourceModality?: 'text' | 'voice';
+
+  // Contradiction detection
+  conflictWithMemoryId?: string | null;
+  conflictRationale?: string | null;
+  evolutionType?: 'none' | 'reinforcement' | 'shift' | 'contradiction';
 }
 
 export interface ExtractMemoriesRequest {
@@ -217,11 +279,42 @@ export interface ExtractMemoriesResponse {
 }
 
 export interface SaveMemoryRequest {
-  sessionId: string;
+  sessionId?: string;
+  sourceType?: 'extracted' | 'manual';
   fact: string;
   category: MemoryCategory;
   userNotes?: string;
+  importance?: number;
   confidence?: number;
+  sourceMessageId?: string | null;
+  sourceSnippet?: string | null;
+  turnTimestamp?: string | null;
+  sourceModality?: 'text' | 'voice' | null;
+  supersedesMemoryId?: string | null;
+}
+
+export interface VaultMoment {
+  id: string;
+  userId: string;
+  title: string;
+  narrative: string;
+  occurredAt: string;
+  createdAt: unknown;
+  updatedAt?: unknown;
+  memoryIds: string[];
+  reflectionIds: string[];
+  commitmentIds: string[];
+  documentIds: string[];
+  locationContext?: LocationContext | null;
+  provenance: {
+    sourceRecordCount: number;
+    memoryCount: number;
+    reflectionCount: number;
+    commitmentCount?: number;
+    documentCount?: number;
+    synthesizedBy: string;
+  };
+  status: 'active' | 'archived';
 }
 
 export type AppView =
@@ -230,7 +323,8 @@ export type AppView =
   | 'vault'
   | 'intelligence'
   | 'documents'
-  | 'calendar';
+  | 'calendar'
+  | 'moments';
 
 export type ContextRailItemKind =
   | 'memory'
@@ -250,3 +344,5 @@ export interface ContextRailItem {
   actionLabel?: string;
   onAction?: () => void;
 }
+
+export * from './documents';

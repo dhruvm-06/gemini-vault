@@ -151,4 +151,28 @@
     margin-left: auto;
     margin-right: auto;
   }
+
+  /* Provenance-linked Turn Golden Pulse animation */
+  @keyframes gv-provenance-pulse-keyframes {
+    0% {
+      background-color: transparent;
+      box-shadow: 0 0 0 0 rgba(194, 136, 58, 0);
+    }
+    20% {
+      background-color: var(--gv-accent-muted);
+      box-shadow: 0 0 0 4px rgba(194, 136, 58, 0.35);
+    }
+    40% {
+      background-color: var(--gv-accent-muted);
+      box-shadow: 0 0 0 2px rgba(194, 136, 58, 0.2);
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 0 rgba(194, 136, 58, 0);
+    }
+  }
+
+  .gv-provenance-pulse {
+    animation: gv-provenance-pulse-keyframes 4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 }

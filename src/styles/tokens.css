@@ -99,23 +99,23 @@
   /* — Surfaces — */
   --gv-surface-ground:       #faf8f5;   /* warm editorial ivory canvas         */
   --gv-surface-base:         #ffffff;   /* crisp pure white reading sheet      */
-  --gv-surface-raised:       #f4f0e8;   /* warm stone tint for cards/pane      */
-  --gv-surface-rail:         #f8f5ee;   /* quiet contextual rail tint          */
+  --gv-surface-raised:       #f2ede4;   /* warm alabaster tint for cards/panes */
+  --gv-surface-rail:         #f7f3eb;   /* quiet contextual rail tint          */
   --gv-surface-nav:          #141312;   /* near-black grounding rail           */
   --gv-surface-nav-text:     #fafaf9;   /* contrast text on near-black         */
   --gv-surface-overlay:      rgba(255, 255, 255, 0.94);
 
   /* — Text — */
   --gv-text-primary:         #1c1917;   /* deep charcoal stone (softer)        */
-  --gv-text-secondary:       #57534e;   /* mid stone 600 for UI controls       */
-  --gv-text-tertiary:        #8c857b;   /* muted warm stone for timestamps     */
-  --gv-text-muted:           #a8a29e;   /* subtle hint stone 400               */
+  --gv-text-secondary:       #44403c;   /* stone-700 for legible UI controls   */
+  --gv-text-tertiary:        #6b645c;   /* warm stone for timestamps/meta      */
+  --gv-text-muted:           #78716c;   /* stone-500 subtle hint text (legible)*/
   --gv-text-inverse:         #fafaf9;   /* stone-50                            */
 
   /* — Borders — */
-  --gv-border-default:       #e7e2d8;   /* warm neutral border                 */
-  --gv-border-subtle:        #f0ece3;   /* delicate separator                  */
-  --gv-border-strong:        #c8c1b4;   /* defined active border               */
+  --gv-border-default:       #dad3c5;   /* warm defined neutral border         */
+  --gv-border-subtle:        #eae4d8;   /* delicate separator                  */
+  --gv-border-strong:        #b5aca0;   /* defined active border               */
 
   /* — Accent: Warm Amber & Burnished Gold — */
   --gv-accent:               #b45309;   /* amber-700 (WCAG AA on light)        */
@@ -137,9 +137,9 @@
   --gv-error-text:           #be123c;   /* rose-700                            */
 
   /* — Elevation / Shadow (restrained, minimal) — */
-  --gv-shadow-sm:            0 1px 2px 0 rgba(28, 25, 23, 0.04);
-  --gv-shadow-md:            0 4px 6px -1px rgba(28, 25, 23, 0.06),
-                             0 2px 4px -2px rgba(28, 25, 23, 0.04);
+  --gv-shadow-sm:            0 1px 2px 0 rgba(28, 25, 23, 0.06);
+  --gv-shadow-md:            0 4px 6px -1px rgba(28, 25, 23, 0.08),
+                             0 2px 4px -2px rgba(28, 25, 23, 0.05);
   --gv-shadow-lg:            0 10px 15px -3px rgba(28, 25, 23, 0.08),
                              0 4px 6px -4px rgba(28, 25, 23, 0.04);
   --gv-shadow-xl:            0 20px 25px -5px rgba(28, 25, 23, 0.08),

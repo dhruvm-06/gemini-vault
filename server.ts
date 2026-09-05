@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -6,6 +7,8 @@ import { securityHeaders } from './server/middleware/securityHeaders';
 import { requireAuth, AuthenticatedRequest } from './server/middleware/auth';
 import journalRouter from './server/routes/journal';
 import memoriesRouter from './server/routes/memories';
+import documentsRouter from './server/routes/documents';
+import momentsRouter from './server/routes/moments';
 import { setupVoiceWebSocket } from './server/routes/voiceLive';
 
 async function startServer() {
@@ -49,6 +52,18 @@ async function startServer() {
 
   // Vault Memory API Routes (Stage 4.1)
   app.use('/api/memories', memoriesRouter);
+
+  // Document Intelligence API Routes
+  app.use('/api/documents', documentsRouter);
+
+  // Vault Moments API Routes
+  app.use('/api/moments', momentsRouter);
+
+  // Data Sovereignty & Portability Export Alias
+  app.get('/api/vault/export', (req, res, next) => {
+    req.url = '/export';
+    memoriesRouter(req, res, next);
+  });
 
   // Vite middleware for development vs static files for production
   if (process.env.NODE_ENV !== 'production') {

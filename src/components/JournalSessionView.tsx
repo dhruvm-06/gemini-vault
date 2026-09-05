@@ -14,9 +14,10 @@ import {
   Calendar,
   Bell,
   Clock,
+  MapPin,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { JournalSession, JournalMessage, ContextRailItem } from '../types';
+import { JournalSession, JournalMessage, ContextRailItem, LocationContext } from '../types';
 import { FormattedResponse } from './FormattedResponse';
 import { MemoryReviewSection } from './MemoryReviewSection';
 import { VaultPresence } from './VaultPresence';
@@ -264,17 +265,24 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
 interface TurnItemProps {
   message: JournalMessage;
   isLatest: boolean;
+  isHighlighted?: boolean;
   registerRef?: (node: HTMLDivElement | null) => void;
 }
 
-export const TurnItem: React.FC<TurnItemProps> = ({ message, isLatest, registerRef }) => {
+export const TurnItem: React.FC<TurnItemProps> = ({ message, isLatest, isHighlighted, registerRef }) => {
   const isUser = message.role === 'user';
 
   if (isUser) {
     return (
       <div
+        id={message.id ? `turn-${message.id}` : undefined}
+        data-turn-id={message.id}
         ref={registerRef}
-        className="w-full flex flex-col items-start my-6 animate-turn-enter"
+        className={`w-full flex flex-col items-start my-6 animate-turn-enter transition-all duration-500 rounded-2xl ${
+          isHighlighted
+            ? 'gv-provenance-pulse p-3.5 sm:p-4 border border-[var(--gv-accent-border)] bg-[var(--gv-accent-muted)]/20'
+            : ''
+        }`}
       >
         <div className="w-full pl-4 sm:pl-5 border-l-2 border-[var(--gv-border-strong)] transition-colors">
           <div className="flex items-center gap-1.5 text-[11px] text-[var(--gv-text-tertiary)] font-sans uppercase tracking-wider mb-1.5">
@@ -297,8 +305,14 @@ export const TurnItem: React.FC<TurnItemProps> = ({ message, isLatest, registerR
 
   return (
     <div
+      id={message.id ? `turn-${message.id}` : undefined}
+      data-turn-id={message.id}
       ref={registerRef}
-      className="w-full flex flex-col items-start my-7 animate-turn-enter transition-colors"
+      className={`w-full flex flex-col items-start my-7 animate-turn-enter transition-all duration-500 rounded-2xl ${
+        isHighlighted
+          ? 'gv-provenance-pulse p-3.5 sm:p-4 border border-[var(--gv-accent-border)] bg-[var(--gv-accent-muted)]/20'
+          : ''
+      }`}
     >
       <div className="flex items-center gap-2 text-xs font-sans text-[var(--gv-accent)] mb-2.5">
         <div className="w-5 h-5 rounded-full bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center text-[var(--gv-accent-gold)] shrink-0">
@@ -340,6 +354,10 @@ interface ReflectComposerProps {
   onSend: () => void;
   onContinueSession?: () => void;
   onEnterVoiceMode?: () => void;
+  locationContext?: LocationContext | null;
+  onCaptureLocation?: () => void;
+  onRemoveLocation?: () => void;
+  isLocating?: boolean;
 }
 
 export const ReflectComposer: React.FC<ReflectComposerProps> = ({
@@ -352,6 +370,10 @@ export const ReflectComposer: React.FC<ReflectComposerProps> = ({
   onSend,
   onContinueSession,
   onEnterVoiceMode,
+  locationContext,
+  onCaptureLocation,
+  onRemoveLocation,
+  isLocating,
 }) => {
   if (isCompleted) {
     return (
@@ -385,6 +407,23 @@ export const ReflectComposer: React.FC<ReflectComposerProps> = ({
 
   return (
     <div className="space-y-2">
+      {locationContext && (
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[var(--gv-accent-muted)]/30 border border-[var(--gv-accent-border)] text-[11px] text-[var(--gv-accent-text)] max-w-fit">
+          <MapPin className="w-3 h-3 shrink-0" />
+          <span>{locationContext.label}</span>
+          {onRemoveLocation && (
+            <button
+              type="button"
+              onClick={onRemoveLocation}
+              className="p-0.5 hover:text-[var(--gv-text-primary)] rounded transition cursor-pointer ml-1"
+              aria-label="Remove location"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="relative rounded-2xl bg-[var(--gv-surface-base)] border border-[var(--gv-border-default)] focus-within:border-[var(--gv-accent)] focus-within:ring-2 focus-within:ring-[var(--gv-focus-ring)] transition shadow-sm">
         <textarea
           ref={textareaRef}
@@ -426,9 +465,23 @@ export const ReflectComposer: React.FC<ReflectComposerProps> = ({
       </div>
 
       <div className="flex items-center justify-between px-1 text-[11px] text-[var(--gv-text-tertiary)] font-sans select-none">
-        <span>
-          Press <kbd className="px-1.5 py-0.5 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-text-secondary)] font-mono text-[10px]">Return</kbd> to send, <kbd className="px-1.5 py-0.5 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-text-secondary)] font-mono text-[10px]">Shift+Return</kbd> for newline
-        </span>
+        <div className="flex items-center gap-3">
+          <span>
+            Press <kbd className="px-1.5 py-0.5 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-text-secondary)] font-mono text-[10px]">Return</kbd> to send
+          </span>
+          {!locationContext && onCaptureLocation && (
+            <button
+              type="button"
+              onClick={onCaptureLocation}
+              disabled={isLocating || isSending}
+              className="inline-flex items-center gap-1 text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] transition cursor-pointer"
+              title="Add single-shot location context to reflection"
+            >
+              <MapPin className="w-3 h-3 text-[var(--gv-accent-gold)]" />
+              <span>{isLocating ? 'Locating…' : 'Add location'}</span>
+            </button>
+          )}
+        </div>
         <span className="hidden sm:inline">Encrypted in personal vault isolation</span>
       </div>
     </div>
@@ -452,9 +505,55 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   onContextItemsChange,
   initialMode = 'text',
 }) => {
-  const { getIdToken } = useAuth();
+  const { getIdToken, userProfile } = useAuth();
 
   const [studioMode, setStudioMode] = useState<'text' | 'voice'>(initialMode);
+  const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
+  const [isLocating, setIsLocating] = useState<boolean>(false);
+
+  const handleCaptureLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    const preferredMode = userProfile?.preferences?.defaultLocationMode || 'coarse';
+    const isPrecise = preferredMode === 'precise';
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        const lat = isPrecise
+          ? Math.round(pos.coords.latitude * 10000) / 10000
+          : Math.round(pos.coords.latitude * 10) / 10;
+        const lng = isPrecise
+          ? Math.round(pos.coords.longitude * 10000) / 10000
+          : Math.round(pos.coords.longitude * 10) / 10;
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, ' ');
+        const label = isPrecise
+          ? `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+          : `${tz} (~${lat.toFixed(1)}, ${lng.toFixed(1)})`;
+
+        setLocationContext({
+          mode: isPrecise ? 'precise' : 'coarse',
+          label,
+          latitude: lat,
+          longitude: lng,
+          capturedAt: new Date().toISOString(),
+        });
+      },
+      (err) => {
+        setIsLocating(false);
+        console.warn('[LocationContext] Geolocation request denied or unavailable:', err);
+      },
+      {
+        enableHighAccuracy: isPrecise,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
+  };
 
   useEffect(() => {
     setStudioMode(initialMode);
@@ -478,6 +577,10 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   const [isConcluding, setIsConcluding] = useState(false);
   const [isReviewingMemories, setIsReviewingMemories] = useState(false);
 
+  const [highlightedTurnId, setHighlightedTurnId] = useState<string | null>(() => {
+    return new URLSearchParams(window.location.search).get('turn');
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const assistantMessageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -486,6 +589,29 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
   const focusAfterResponseRef = useRef(false);
   const initialPromptSentRef = useRef(false);
   const loadedSessionRef = useRef<string | null>(null);
+
+  // Deep-linking: scroll to turn if ?turn=<turnId> is present
+  useEffect(() => {
+    if (!highlightedTurnId || messages.length === 0) return;
+
+    const timer = setTimeout(() => {
+      const el =
+        document.getElementById(`turn-${highlightedTurnId}`) ||
+        assistantMessageRefs.current.get(highlightedTurnId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 200);
+
+    const clearTimer = setTimeout(() => {
+      setHighlightedTurnId(null);
+    }, 4500);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(clearTimer);
+    };
+  }, [highlightedTurnId, messages]);
 
   // Auto-scroll to latest message
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -794,6 +920,9 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
           sessionId,
           message: text,
           clientMessageId: clientMsgId,
+          conversationTone: userProfile?.preferences?.conversationTone,
+          reflectionDepth: userProfile?.preferences?.reflectionDepth,
+          locationContext: locationContext || undefined,
         }),
       });
 
@@ -909,7 +1038,11 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
     );
 
     setShowConcludeModal(false);
-    setIsReviewingMemories(true);
+    if (userProfile?.preferences?.memorySuggestions === false) {
+      setIsReviewingMemories(false);
+    } else {
+      setIsReviewingMemories(true);
+    }
   } catch (err) {
     console.error('[JournalSessionView] Error concluding session:', err);
   } finally {
@@ -964,6 +1097,9 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
             setStudioMode('text');
             setShowConcludeModal(true);
           }}
+          onSessionTitled={(newTitle) => {
+            setSession((prev) => (prev ? { ...prev, title: newTitle } : null));
+          }}
         />
       </div>
     );
@@ -1016,6 +1152,7 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
                   key={msg.id || index}
                   message={msg}
                   isLatest={isLatest}
+                  isHighlighted={Boolean(msg.id && msg.id === highlightedTurnId)}
                   registerRef={(node) => {
                     const id = msg.id;
                     if (!id) return;
@@ -1107,6 +1244,10 @@ export const JournalSessionView: React.FC<JournalSessionViewProps> = ({
             onSend={() => sendMessage()}
             onContinueSession={onContinueSession ? () => onContinueSession(sessionId) : undefined}
             onEnterVoiceMode={() => setStudioMode('voice')}
+            locationContext={locationContext}
+            onCaptureLocation={handleCaptureLocation}
+            onRemoveLocation={() => setLocationContext(null)}
+            isLocating={isLocating}
           />
         </div>
       </footer>

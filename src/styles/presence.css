@@ -226,10 +226,22 @@
   }
 }
 
-/* — Ended / Muted: Calm, quiet rest state — */
-.vault-presence-container[data-state="ended"] .vault-presence-aura {
-  opacity: 0.25;
+/* — Ended & Muted: Calm, subdued presence state — */
+.vault-presence-container[data-state="ended"] .vault-presence-aura,
+.vault-presence-container[data-state="muted"] .vault-presence-aura {
+  opacity: 0.2;
   animation: none;
+  transform: scale(0.92);
+}
+
+.vault-presence-container[data-state="muted"] .vault-presence-orbital-ring {
+  animation-play-state: paused;
+  stroke-opacity: 0.25;
+}
+
+.vault-presence-container[data-state="muted"] .vault-presence-core {
+  opacity: 0.5;
+  animation-play-state: paused;
 }
 
 /* ============================================================================
@@ -243,9 +255,10 @@
   .vault-presence-core {
     animation: none !important;
     transform: none !important;
+    transition: none !important;
   }
 
   .vault-presence-aura {
-    opacity: 0.7 !important;
+    opacity: 0.5 !important;
   }
 }

@@ -3,7 +3,13 @@ import http from 'http';
 import crypto from 'crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '../firebaseAdmin';
-import { getGeminiClient, LIVE_VOICE_MODEL, JOURNAL_SYSTEM_INSTRUCTION } from '../gemini';
+import {
+  getGeminiClient,
+  getGeminiLiveClient,
+  LIVE_VOICE_MODEL,
+  JOURNAL_SYSTEM_INSTRUCTION,
+  MODEL_FALLBACK_LADDER,
+} from '../gemini';
 import { SAFE_ID_REGEX } from './journal';
 
 // Active voice connections map: userId -> WebSocket
@@ -35,12 +41,151 @@ interface SocketContext {
   currentAssistantTurnId?: string;
   accumulatedAssistantText: string;
   accumulatedUserText: string;
+  lastFinalizedUserText?: string;
+  hasOutputTranscription?: boolean;
+  finalizedUserTurns: string[];
+  userTurnsCount: number;
+  titleGenerationState: 'none' | 'initial' | 'refined';
+  isGeneratingTitle: boolean;
+  currentSessionTitle?: string;
   userTurnStartTime?: number;
   sessionStartTime: number;
   authTimeoutTimer?: NodeJS.Timeout;
   pingInterval?: NodeJS.Timeout;
   durationTimer?: NodeJS.Timeout;
   warningTimer?: NodeJS.Timeout;
+}
+
+/**
+ * Generates a concise, human reflection title (3-6 words) based on accumulated user thoughts.
+ * Uses server-side Gemini without blocking the active voice streaming loop.
+ */
+async function generateVoiceSessionTitle(accumulatedThoughts: string[]): Promise<string | null> {
+  const contextText = accumulatedThoughts
+    .map((t, i) => `Thought ${i + 1}: ${t}`)
+    .join('\n')
+    .slice(0, 800);
+
+  const prompt = `You are titling a private reflection session in Gemini Vault.
+Based strictly on the reflector's accumulated thoughts below, generate a concise, human, insightful title (3 to 6 words) that captures their core dilemma, theme, or intention.
+
+<reflector_thoughts>
+${contextText}
+</reflector_thoughts>
+
+Strict Rules:
+- 3 to 6 words only.
+- Must summarize the actual reflector thoughts above; do not assume or invent unstated facts.
+- Do NOT use generic titles like "Voice Reflection", "My Thoughts", "Reflection Session", "Finding Clarity", "Self Reflection", "Journal Entry", "Morning Thoughts", "Evening Reflection", or "User Thoughts".
+- Do NOT use quotation marks, asterisks, backticks, or markdown.
+- Return ONLY the clean title text.`;
+
+  const ai = process.env.GEMINI_API_KEY ? getGeminiLiveClient() : getGeminiClient();
+  const models = MODEL_FALLBACK_LADDER;
+
+  const GENERIC_TITLES = new Set([
+    'voice reflection',
+    'my thoughts',
+    'reflection session',
+    'finding clarity',
+    'self reflection',
+    'journal entry',
+    'morning thoughts',
+    'evening reflection',
+    'user thoughts',
+    'untitled',
+  ]);
+
+  for (const model of models) {
+    try {
+      const resp = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          maxOutputTokens: 25,
+          temperature: 0.3,
+        },
+      });
+      const rawTitle = resp.text?.replace(/["'*_#`]/g, '').trim();
+      if (
+        rawTitle &&
+        rawTitle.length >= 3 &&
+        rawTitle.length <= 60 &&
+        !GENERIC_TITLES.has(rawTitle.toLowerCase())
+      ) {
+        return rawTitle;
+      }
+    } catch (err) {
+      console.warn(`[Voice Titling] Model ${model} generation failed:`, err);
+    }
+  }
+  return null;
+}
+
+/**
+ * Triggers asynchronous title generation after accumulating sufficient context (2-3 turns).
+ * Allows at most one later refinement.
+ */
+function triggerAutoTitling(
+  ctx: SocketContext,
+  sessionRef: FirebaseFirestore.DocumentReference
+): void {
+  const turnCount = ctx.finalizedUserTurns.length;
+  const totalWords = ctx.finalizedUserTurns.reduce(
+    (acc, t) => acc + t.trim().split(/\s+/).filter(Boolean).length,
+    0
+  );
+
+  // Condition 1: Initial title after 2-3 meaningful turns with sufficient text context (never on turn 1)
+  const shouldInitialTitle =
+    ctx.titleGenerationState === 'none' &&
+    !ctx.isGeneratingTitle &&
+    ((turnCount >= 2 && totalWords >= 15) || turnCount >= 3);
+
+  // Condition 2: Controlled refinement around turn 5-6 after topic evolves
+  const shouldRefineTitle =
+    ctx.titleGenerationState === 'initial' &&
+    !ctx.isGeneratingTitle &&
+    ctx.userTurnsCount >= 5 &&
+    turnCount >= 4;
+
+  if (!shouldInitialTitle && !shouldRefineTitle) {
+    return;
+  }
+
+  const nextState = shouldInitialTitle ? 'initial' : 'refined';
+  ctx.titleGenerationState = nextState;
+  ctx.isGeneratingTitle = true;
+  const turnsSnapshot = [...ctx.finalizedUserTurns];
+
+  (async () => {
+    try {
+      const generatedTitle = await generateVoiceSessionTitle(turnsSnapshot);
+      if (
+        generatedTitle &&
+        generatedTitle !== ctx.currentSessionTitle &&
+        ctx.userId
+      ) {
+        ctx.currentSessionTitle = generatedTitle;
+        await sessionRef.update({
+          title: generatedTitle,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        sendToClient(ctx.ws, {
+          type: 'session_titled',
+          title: generatedTitle,
+        });
+        console.log(`[Voice Titling] Session ${ctx.sessionId} titled (${nextState}): "${generatedTitle}"`);
+      }
+    } catch (titleErr) {
+      console.warn(`[Voice Titling] Titling failed for session ${ctx.sessionId} (preserving existing):`, titleErr);
+    } finally {
+      ctx.isGeneratingTitle = false;
+    }
+  })().catch((err) => {
+    console.error('[Voice Titling] Unhandled background titling error:', err);
+    ctx.isGeneratingTitle = false;
+  });
 }
 
 function sendToClient(ws: WebSocket, message: Record<string, unknown>): void {
@@ -83,6 +228,11 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
       isAuthenticated: false,
       accumulatedAssistantText: '',
       accumulatedUserText: '',
+      finalizedUserTurns: [],
+      hasOutputTranscription: false,
+      userTurnsCount: 0,
+      titleGenerationState: 'none',
+      isGeneratingTitle: false,
       sessionStartTime: Date.now(),
     };
 
@@ -182,6 +332,16 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
             return;
           }
 
+          if (sessionData?.title) {
+            ctx.currentSessionTitle = sessionData.title;
+            if (
+              !sessionData.title.startsWith('Voice Reflection') &&
+              !sessionData.title.startsWith('Reflection Session')
+            ) {
+              ctx.titleGenerationState = 'initial';
+            }
+          }
+
           // Enforce 1 active voice connection per user (terminate previous if any)
           const existingSocket = activeConnections.get(uid);
           if (existingSocket && existingSocket !== ws && existingSocket.readyState === WebSocket.OPEN) {
@@ -235,14 +395,16 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
 
           const fullSystemInstruction = `${JOURNAL_SYSTEM_INSTRUCTION}${contextPreamble}`;
 
-          // Connect to Gemini Live API via Vertex AI ADC
+          // Connect to Gemini Live API via server-side Gemini client
           try {
-            const ai = getGeminiClient();
+            const ai = getGeminiLiveClient();
 
             ctx.liveSession = await ai.live.connect({
               model: LIVE_VOICE_MODEL,
               config: {
                 responseModalities: ['AUDIO' as any],
+                inputAudioTranscription: {},
+                outputAudioTranscription: {},
                 systemInstruction: { parts: [{ text: fullSystemInstruction }] },
               },
               callbacks: {
@@ -251,9 +413,94 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                     const serverContent = liveMsg.serverContent;
                     if (!serverContent) return;
 
-                    // Handle Interruption Signal from Gemini Live
+                    // Helper to finalize a user turn: immediate client dispatch with non-blocking Firestore persistence
+                    const finalizeUserTurn = (rawText: string) => {
+                      const userText = rawText.trim();
+                      if (userText.length === 0 || !ctx.userId) return;
+                      // Intra-turn duplicate check: do not emit duplicate turns within the same speaking cycle
+                      if (userText === ctx.lastFinalizedUserText) return;
+
+                      ctx.lastFinalizedUserText = userText;
+                      ctx.accumulatedUserText = '';
+                      ctx.userTurnsCount = (ctx.userTurnsCount || 0) + 1;
+
+                      if (!ctx.finalizedUserTurns) ctx.finalizedUserTurns = [];
+                      ctx.finalizedUserTurns.push(userText);
+                      if (ctx.finalizedUserTurns.length > 6) {
+                        ctx.finalizedUserTurns = ctx.finalizedUserTurns.slice(-6);
+                      }
+
+                      const userMsgId = `msg_u_v_${crypto.randomUUID()}`;
+                      const userPayload = {
+                        id: userMsgId,
+                        role: 'user',
+                        content: userText,
+                        modality: 'voice',
+                        interrupted: false,
+                        clientTimestamp: new Date().toISOString(),
+                        timestamp: FieldValue.serverTimestamp(),
+                      };
+
+                      // 1. Immediately send turn_persisted to client (<1ms) - DO NOT block on Firestore I/O
+                      sendToClient(ws, {
+                        type: 'turn_persisted',
+                        message: {
+                          id: userMsgId,
+                          role: 'user',
+                          content: userText,
+                          modality: 'voice',
+                          interrupted: false,
+                          clientTimestamp: userPayload.clientTimestamp,
+                        },
+                      });
+
+                      // 2. Persist to Firestore asynchronously in background
+                      sessionRef
+                        .collection('messages')
+                        .doc(userMsgId)
+                        .set(userPayload)
+                        .catch((dbErr) => {
+                          console.error(`[Voice Live] Failed to persist user turn ${userMsgId}:`, dbErr);
+                        });
+
+                      const wordsAdded = userText.split(/\s+/).filter(Boolean).length;
+                      sessionRef
+                        .update({
+                          wordCount: FieldValue.increment(wordsAdded),
+                          updatedAt: FieldValue.serverTimestamp(),
+                        })
+                        .catch((dbErr) => {
+                          console.error(`[Voice Live] Failed to update wordCount for session ${sessionId}:`, dbErr);
+                        });
+
+                      // Trigger asynchronous automatic session titling
+                      triggerAutoTitling(ctx, sessionRef);
+                    };
+
+                    // 1. Live interim user transcription preview (ephemeral UI state)
+                    const interimInput = serverContent.interimInputTranscription || serverContent.interim_input_transcription;
+                    if (interimInput?.text) {
+                      const interimText = interimInput.text;
+                      ctx.accumulatedUserText = interimText;
+                      sendToClient(ws, {
+                        type: 'interim_transcript',
+                        role: 'user',
+                        text: interimText,
+                      });
+                    }
+
+                    // 2. Canonical finalized user turn transcription
+                    const inputTranscription = serverContent.inputTranscription || serverContent.input_transcription;
+                    if (inputTranscription?.text) {
+                      finalizeUserTurn(inputTranscription.text);
+                    }
+
+                    // 3. Handle Interruption Signal from Gemini Live
                     if (serverContent.interrupted) {
                       console.log(`[Voice Live] Interruption detected for session ${sessionId}`);
+                      ctx.hasOutputTranscription = false;
+                      // Reset user turn deduplication tracker on interruption so next speech turn starts clean
+                      ctx.lastFinalizedUserText = undefined;
                       const partialContent = ctx.accumulatedAssistantText.trim();
                       ctx.accumulatedAssistantText = '';
 
@@ -269,13 +516,20 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                           clientTimestamp: new Date().toISOString(),
                           timestamp: FieldValue.serverTimestamp(),
                         };
-                        await sessionRef.collection('messages').doc(assistantMsgId).set(payload);
 
                         sendToClient(ws, {
                           type: 'interrupted',
                           assistantTurnId: assistantMsgId,
                           finalContent: partialContent,
                         });
+
+                        sessionRef
+                          .collection('messages')
+                          .doc(assistantMsgId)
+                          .set(payload)
+                          .catch((dbErr) => {
+                            console.error(`[Voice Live] Failed to persist interrupted assistant turn ${assistantMsgId}:`, dbErr);
+                          });
                       } else {
                         sendToClient(ws, { type: 'interrupted' });
                       }
@@ -284,8 +538,26 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                       return;
                     }
 
-                    // Handle Model Turn Audio and Transcript
+                    // 4. Handle Output Transcription (Gemini spoken text stream)
+                    const outputTranscription = serverContent.outputTranscription || serverContent.output_transcription;
+                    if (outputTranscription?.text) {
+                      ctx.hasOutputTranscription = true;
+                      ctx.accumulatedAssistantText += outputTranscription.text;
+                      sendToClient(ws, {
+                        type: 'interim_transcript',
+                        role: 'assistant',
+                        text: ctx.accumulatedAssistantText,
+                      });
+                    }
+
+                    // 5. Handle Model Turn Audio and Transcript
                     if (serverContent.modelTurn?.parts) {
+                      // If model begins responding but user turn was not yet finalized from inputTranscription,
+                      // promote the accumulated interim user speech into the current user turn exactly once.
+                      if (ctx.accumulatedUserText.trim().length > 0) {
+                        finalizeUserTurn(ctx.accumulatedUserText);
+                      }
+
                       sendToClient(ws, { type: 'state_change', state: 'speaking' });
 
                       for (const part of serverContent.modelTurn.parts) {
@@ -296,8 +568,8 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                             pcm: part.inlineData.data, // base64 24kHz 16-bit PCM
                           });
                         }
-                        // Accumulate and stream interim transcript text
-                        if (part.text) {
+                        // Accumulate and stream interim transcript text ONLY if outputTranscription is not active
+                        if (part.text && !ctx.hasOutputTranscription && !outputTranscription?.text) {
                           ctx.accumulatedAssistantText += part.text;
                           sendToClient(ws, {
                             type: 'interim_transcript',
@@ -308,8 +580,11 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                       }
                     }
 
-                    // Handle Turn Completion
+                    // 6. Handle Turn Completion
                     if (serverContent.turnComplete) {
+                      ctx.hasOutputTranscription = false;
+                      // Reset user turn deduplication tracker so repeated short responses ("Yes", "No", etc.) on next turn succeed
+                      ctx.lastFinalizedUserText = undefined;
                       const finalContent = ctx.accumulatedAssistantText.trim();
                       ctx.accumulatedAssistantText = '';
 
@@ -325,8 +600,7 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                           timestamp: FieldValue.serverTimestamp(),
                         };
 
-                        await sessionRef.collection('messages').doc(assistantMsgId).set(payload);
-
+                        // Immediate client dispatch - DO NOT block on Firestore I/O
                         sendToClient(ws, {
                           type: 'turn_persisted',
                           message: {
@@ -339,12 +613,25 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                           },
                         });
 
+                        // Persist to Firestore asynchronously in background
+                        sessionRef
+                          .collection('messages')
+                          .doc(assistantMsgId)
+                          .set(payload)
+                          .catch((dbErr) => {
+                            console.error(`[Voice Live] Failed to persist assistant turn ${assistantMsgId}:`, dbErr);
+                          });
+
                         // Update session wordCount
-                        const wordsAdded = finalContent.split(/\s+/).length;
-                        await sessionRef.update({
-                          wordCount: FieldValue.increment(wordsAdded),
-                          updatedAt: FieldValue.serverTimestamp(),
-                        });
+                        const wordsAdded = finalContent.split(/\s+/).filter(Boolean).length;
+                        sessionRef
+                          .update({
+                            wordCount: FieldValue.increment(wordsAdded),
+                            updatedAt: FieldValue.serverTimestamp(),
+                          })
+                          .catch((dbErr) => {
+                            console.error(`[Voice Live] Failed to update wordCount for session ${sessionId}:`, dbErr);
+                          });
                       }
 
                       sendToClient(ws, { type: 'state_change', state: 'listening' });
@@ -354,11 +641,35 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                   }
                 },
                 onerror: (err: any) => {
-                  console.error('[Voice Live] Gemini Live API error:', err);
-                  sendError(ws, 'MODEL_ERROR', 'The voice companion encountered a temporary connection glitch.');
+                  const errPayload = {
+                    model: LIVE_VOICE_MODEL,
+                    sessionId,
+                    message: err?.message || (typeof err === 'string' ? err : 'Unknown upstream error'),
+                    code: err?.code,
+                    status: err?.status,
+                  };
+                  console.error(`[Voice Live] Gemini Live API error for session ${sessionId} (model: ${LIVE_VOICE_MODEL}):`, JSON.stringify(errPayload));
+                  sendError(ws, 'MODEL_ERROR', 'The voice companion encountered a connection glitch.');
                 },
-                onclose: () => {
-                  console.log(`[Voice Live] Gemini Live API stream closed for session ${sessionId}`);
+                onclose: (closeEvt: any) => {
+                  const closeDetails = {
+                    model: LIVE_VOICE_MODEL,
+                    sessionId,
+                    code: closeEvt?.code,
+                    reason: closeEvt?.reason || (closeEvt?.target?._closeMessage ? closeEvt.target._closeMessage.toString() : undefined),
+                    wasClean: closeEvt?.wasClean,
+                  };
+                  console.warn(`[Voice Live] Gemini Live API stream closed for session ${sessionId} (model: ${LIVE_VOICE_MODEL}):`, JSON.stringify(closeDetails));
+
+                  if (ws.readyState === WebSocket.OPEN) {
+                    sendError(
+                      ws,
+                      'MODEL_UNAVAILABLE',
+                      'The live voice companion stream closed unexpectedly. You can continue reflecting via text.',
+                      true
+                    );
+                    ws.close(4503, 'Upstream Live Stream Closed');
+                  }
                 },
               },
             });
@@ -366,8 +677,15 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
             console.log(`[Voice Live] Successfully connected to Gemini Live (${LIVE_VOICE_MODEL}) for session ${sessionId}`);
             sendToClient(ws, { type: 'ready', sessionId });
             sendToClient(ws, { type: 'state_change', state: 'listening' });
-          } catch (liveErr) {
-            console.error('[Voice Live] Failed to connect to Gemini Live API:', liveErr);
+          } catch (liveErr: any) {
+            const errPayload = {
+              model: LIVE_VOICE_MODEL,
+              sessionId,
+              message: liveErr?.message || String(liveErr),
+              code: liveErr?.code,
+              status: liveErr?.status,
+            };
+            console.error(`[Voice Live] Failed to connect to Gemini Live API for session ${sessionId} (model: ${LIVE_VOICE_MODEL}):`, JSON.stringify(errPayload));
             sendError(
               ws,
               'MODEL_UNAVAILABLE',
@@ -406,7 +724,7 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
                 }
 
                 ctx.liveSession.sendRealtimeInput({
-                  media: {
+                  audio: {
                     mimeType: 'audio/pcm;rate=16000',
                     data: msg.data,
                   },
@@ -468,6 +786,7 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
               if (ctx.liveSession) {
                 // Clearing liveSession buffer
                 ctx.accumulatedAssistantText = '';
+                ctx.lastFinalizedUserText = undefined;
                 sendToClient(ws, { type: 'state_change', state: 'listening' });
               }
               break;
@@ -494,7 +813,7 @@ export function setupVoiceWebSocket(server: http.Server): WebSocketServer {
           }
 
           ctx.liveSession.sendRealtimeInput({
-            media: {
+            audio: {
               mimeType: 'audio/pcm;rate=16000',
               data: rawData.toString('base64'),
             },

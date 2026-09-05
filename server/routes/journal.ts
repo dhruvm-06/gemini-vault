@@ -13,11 +13,34 @@ const router = Router();
 // Every document query is strictly scoped under the authenticated req.user.uid.
 export const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
 
+const locationContextSchema = z.object({
+  mode: z.enum(['coarse', 'precise']),
+  label: z.string().min(1).max(200),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  capturedAt: z.string().optional().default(() => new Date().toISOString()),
+});
+
+export const TONE_INSTRUCTIONS = {
+  empathic: 'Maintain a warm, patient, and deeply supportive presence.',
+  direct: 'Be clear, candid, and direct without superfluous filler.',
+  philosophical: 'Frame inquiries through existential and conceptual lenses, encouraging principled reflection.',
+} as const;
+
+export const DEPTH_INSTRUCTIONS = {
+  concise: 'Keep responses very brief and focused on a single prompt or question.',
+  balanced: 'Provide moderate depth with one or two thoughtful follow-ups.',
+  deep: 'Explore nuances thoroughly, offering deep structured exploration of underlying assumptions.',
+} as const;
+
 // Zod validation schemas
 const chatRequestSchema = z.object({
   sessionId: z.string().regex(SAFE_ID_REGEX, 'Invalid sessionId format').max(128),
   message: z.string().min(1, 'Message cannot be empty').max(10000, 'Message exceeds 10,000 character limit'),
   clientMessageId: z.string().regex(SAFE_ID_REGEX, 'Invalid clientMessageId format').max(128).optional(),
+  conversationTone: z.enum(['empathic', 'direct', 'philosophical']).optional(),
+  reflectionDepth: z.enum(['concise', 'balanced', 'deep']).optional(),
+  locationContext: locationContextSchema.optional().nullable(),
 });
 
 const createSessionSchema = z.object({
@@ -25,11 +48,13 @@ const createSessionSchema = z.object({
   draftContent: z.string().max(10000).optional(),
   clientStartedAt: z.string().optional(),
   continuedFromSessionId: z.string().regex(SAFE_ID_REGEX, 'Invalid continuedFromSessionId format').max(128).optional(),
+  locationContext: locationContextSchema.optional().nullable(),
 });
 
 const updateSessionSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   draftContent: z.string().max(10000).optional(),
+  locationContext: locationContextSchema.optional().nullable(),
 });
 
 /**
@@ -51,7 +76,14 @@ router.post('/chat', requireAuth, chatRateLimiter, async (req: AuthenticatedRequ
       return;
     }
 
-    const { sessionId, message, clientMessageId } = parseResult.data;
+    const {
+      sessionId,
+      message,
+      clientMessageId,
+      conversationTone,
+      reflectionDepth,
+      locationContext,
+    } = parseResult.data;
     const userId = req.user?.uid;
 
     if (!userId) {
@@ -85,13 +117,17 @@ router.post('/chat', requireAuth, chatRateLimiter, async (req: AuthenticatedRequ
     const userMsgId = clientMessageId || `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const existingUserDoc = await messagesCol.doc(userMsgId).get();
 
-    const userMessagePayload = {
+    const userMessagePayload: Record<string, unknown> = {
       id: userMsgId,
       role: 'user',
       content: message.trim(),
       clientTimestamp: new Date().toISOString(),
       timestamp: FieldValue.serverTimestamp(),
     };
+
+    if (locationContext) {
+      userMessagePayload.locationContext = locationContext;
+    }
 
     if (!existingUserDoc.exists) {
       await messagesCol.doc(userMsgId).set(userMessagePayload);
@@ -133,10 +169,15 @@ router.post('/chat', requireAuth, chatRateLimiter, async (req: AuthenticatedRequ
       });
     }
 
-    // 3. Call Gemini Model with Fallback Ladder
+    // 3. Call Gemini Model with Fallback Ladder and Structured Style Guidance
     let aiResponseText = '';
     try {
-      const geminiResult = await generateJournalResponseWithFallback(history, message.trim());
+      const toneGuidance = conversationTone ? TONE_INSTRUCTIONS[conversationTone] : undefined;
+      const depthGuidance = reflectionDepth ? DEPTH_INSTRUCTIONS[reflectionDepth] : undefined;
+      const geminiResult = await generateJournalResponseWithFallback(history, message.trim(), {
+        toneGuidance,
+        depthGuidance,
+      });
       aiResponseText = geminiResult.text;
     } catch (geminiError: unknown) {
       console.error('[Journal Route] Gemini generation error:', geminiError);
@@ -220,7 +261,7 @@ router.post('/session', requireAuth, async (req: AuthenticatedRequest, res: Resp
     const sessionRef = adminDb.collection('users').doc(userId).collection('sessions').doc(sessionId);
 
     const now = new Date();
-    const { title, draftContent, clientStartedAt, continuedFromSessionId } = parseResult.data;
+    const { title, draftContent, clientStartedAt, continuedFromSessionId, locationContext } = parseResult.data;
 
     let continuationContext = '';
     let continuationTitle = '';
@@ -253,30 +294,31 @@ router.post('/session', requireAuth, async (req: AuthenticatedRequest, res: Resp
 
       continuationTitle =
         typeof sourceData.title === 'string'
-          ? sourceData.title.replace(/^Continuing:\s*/i, '').trim()
-          : '';
+          ? `Continuing: ${sourceData.title}`
+          : 'Continuation Reflection';
 
-      sourceRootSessionId =
-        typeof sourceData.rootSessionId === 'string'
-          ? sourceData.rootSessionId
-          : continuedFromSessionId;
-
-      const sourceMessages = await sourceRef
+      const sourceMessagesSnap = await sourceRef
         .collection('messages')
         .orderBy('timestamp', 'asc')
-        .limitToLast(16)
+        .limit(20)
         .get();
 
-      const contextTurns: string[] = [];
-      sourceMessages.forEach((doc) => {
-        const data = doc.data();
-        if (data && typeof data.content === 'string' && (data.role === 'user' || data.role === 'assistant')) {
-          const roleLabel = data.role === 'assistant' ? 'Gemini Vault' : 'You';
-          contextTurns.push(`${roleLabel}: ${data.content}`);
-        }
-      });
+      if (!sourceMessagesSnap.empty) {
+        const turnSummaries: string[] = [];
+        sourceMessagesSnap.forEach((msgDoc) => {
+          const mData = msgDoc.data();
+          if (mData?.content && typeof mData.content === 'string') {
+            const role = mData.role === 'assistant' ? 'Companion' : 'User';
+            turnSummaries.push(`${role}: ${mData.content.slice(0, 500)}`);
+          }
+        });
+        continuationContext = turnSummaries.join('\n\n');
+      }
 
-      continuationContext = contextTurns.join('\n\n').slice(0, 20000);
+      sourceRootSessionId =
+        typeof sourceData.rootSessionId === 'string' && sourceData.rootSessionId
+          ? sourceData.rootSessionId
+          : continuedFromSessionId;
     }
 
     const defaultTitle =
@@ -300,6 +342,10 @@ router.post('/session', requireAuth, async (req: AuthenticatedRequest, res: Resp
       status: 'active',
       wordCount: 0,
     };
+
+    if (locationContext) {
+      newSession.locationContext = locationContext;
+    }
 
     if (continuedFromSessionId) {
       newSession.continuedFromSessionId = continuedFromSessionId;

@@ -8,6 +8,7 @@ export type VaultPresenceState =
   | 'speaking'
   | 'interrupted'
   | 'reconnecting'
+  | 'muted'
   | 'ended';
 
 export type VaultPresenceSize = 'micro' | 'compact' | 'medium' | 'large' | 'hero';

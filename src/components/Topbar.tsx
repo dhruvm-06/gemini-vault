@@ -1,8 +1,9 @@
 import React from 'react';
-import { Shield, Sun, Moon, PanelRight, Lock, Compass, Mic, Bookmark, Brain, FileText, Calendar } from 'lucide-react';
+import { Sun, Moon, PanelRight, Lock, Compass, Mic, Bookmark, Brain, FileText, Calendar, Search } from 'lucide-react';
 import { AppView } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { VaultPresence } from './VaultPresence';
+import { VaultBrandMark } from './VaultBrandMark';
 
 interface TopbarProps {
   currentView: AppView;
@@ -10,6 +11,7 @@ interface TopbarProps {
   isRailOpen: boolean;
   onToggleRail: () => void;
   onOpenProfile: () => void;
+  onOpenCommandPalette?: () => void;
   user: {
     displayName?: string | null;
     email?: string | null;
@@ -23,6 +25,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   isRailOpen,
   onToggleRail,
   onOpenProfile,
+  onOpenCommandPalette,
   user,
 }) => {
   const { theme, toggle } = useTheme();
@@ -65,8 +68,8 @@ export const Topbar: React.FC<TopbarProps> = ({
       <div className="flex items-center gap-3 min-w-0">
         {/* Mobile brand indicator (visible only below md breakpoint) */}
         <div className="flex md:hidden items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] text-[var(--gv-accent)] flex items-center justify-center shrink-0">
-            <Shield className="w-3.5 h-3.5" />
+          <div className="w-6 h-6 rounded-md bg-[var(--gv-accent-muted)] border border-[var(--gv-accent-border)] flex items-center justify-center shrink-0">
+            <VaultBrandMark size={16} variant="gold" />
           </div>
           <span className="font-serif text-sm font-medium text-[var(--gv-text-primary)]">
             Vault
@@ -101,6 +104,21 @@ export const Topbar: React.FC<TopbarProps> = ({
           <Lock className="w-3 h-3 text-[var(--gv-accent)]" />
           <span>Private Vault</span>
         </div>
+
+        {/* Command Palette Trigger (Desktop/Tablet only) */}
+        {onOpenCommandPalette && (
+          <button
+            type="button"
+            id="topbar-command-palette-btn"
+            onClick={onOpenCommandPalette}
+            className="hidden md:inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] transition cursor-pointer"
+            title="Open Command Palette (Ctrl+K or ⌘K)"
+            aria-label="Open Command Palette (Ctrl+K or ⌘K)"
+          >
+            <Search className="w-3.5 h-3.5 text-[var(--gv-accent)]" />
+            <span className="font-mono text-[10px] text-[var(--gv-text-muted)] font-medium">⌘K</span>
+          </button>
+        )}
 
         {/* Quick Theme Toggle */}
         <button

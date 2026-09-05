@@ -22,6 +22,7 @@ interface VoiceStudioViewProps {
   onTurnPersisted: (turn: JournalMessage) => void;
   onInterrupted?: (turnId?: string, text?: string) => void;
   onConcludeSession: () => void;
+  onSessionTitled?: (title: string) => void;
 }
 
 export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
@@ -33,7 +34,30 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
   onTurnPersisted,
   onInterrupted,
   onConcludeSession,
+  onSessionTitled,
 }) => {
+  const [currentTitle, setCurrentTitle] = React.useState(sessionTitle);
+
+  React.useEffect(() => {
+    if (sessionTitle) {
+      setCurrentTitle(sessionTitle);
+    }
+  }, [sessionTitle]);
+
+  const handleConcluded = React.useCallback(() => {
+    onConcludeSession();
+  }, [onConcludeSession]);
+
+  const handleSessionTitled = React.useCallback(
+    (newTitle: string) => {
+      setCurrentTitle(newTitle);
+      if (onSessionTitled) {
+        onSessionTitled(newTitle);
+      }
+    },
+    [onSessionTitled]
+  );
+
   const {
     status,
     presenceState,
@@ -52,9 +76,8 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
     getIdToken,
     onTurnPersisted,
     onInterrupted,
-    onConcluded: () => {
-      onConcludeSession();
-    },
+    onConcluded: handleConcluded,
+    onSessionTitled: handleSessionTitled,
   });
 
   const transcriptScrollRef = useRef<HTMLDivElement>(null);
@@ -103,6 +126,9 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
   };
 
   const getStatusLabel = () => {
+    if (error && status === 'error') {
+      return 'Voice reflection unavailable';
+    }
     if (isMuted) return 'Microphone muted';
     switch (presenceState) {
       case 'listening':
@@ -133,7 +159,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
           <button
             type="button"
             onClick={onReturnToText}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] text-xs font-medium transition cursor-pointer shrink-0"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] text-xs font-medium transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] cursor-pointer shrink-0"
             aria-label="Return to Text Reflection"
             title="Switch to keyboard typing (Esc)"
           >
@@ -143,7 +169,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
 
           <div className="flex flex-col min-w-0">
             <h2 className="font-serif text-sm sm:text-base font-medium text-[var(--gv-text-primary)] truncate max-w-xs sm:max-w-md">
-              {sessionTitle || 'Voice Reflection'}
+              {currentTitle || 'Voice Reflection'}
             </h2>
             <div className="flex items-center gap-2 text-[11px] text-[var(--gv-accent)] font-sans">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse" />
@@ -162,7 +188,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
           <button
             type="button"
             onClick={onConcludeSession}
-            className="px-3.5 py-1.5 rounded-xl bg-[var(--gv-accent)] hover:opacity-90 text-white text-xs font-medium transition cursor-pointer shadow-xs"
+            className="px-3.5 py-1.5 rounded-xl bg-[var(--gv-accent)] hover:opacity-90 text-white text-xs font-medium transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] cursor-pointer shadow-xs"
           >
             Conclude
           </button>
@@ -203,7 +229,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
           <div className="relative flex items-center justify-center">
             <VaultPresence
               size="large"
-              state={presenceState}
+              state={isMuted ? 'muted' : presenceState}
               audioReactivity={audioReactivity}
               className="scale-90 sm:scale-110 md:scale-125 transition-transform duration-300"
             />
@@ -219,45 +245,52 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
           </div>
         </div>
 
-        {/* Rolling Live Transcript Stream */}
+        {/* Rolling Live Transcript Stream (Editorial Layout) */}
         <div
           ref={transcriptScrollRef}
-          className="w-full max-h-48 sm:max-h-60 overflow-y-auto px-4 py-3 rounded-2xl bg-[var(--gv-surface-base)]/65 border border-[var(--gv-border-subtle)]/80 backdrop-blur-xs space-y-3 font-sans text-xs scroll-smooth"
+          className="w-full max-h-48 sm:max-h-60 overflow-y-auto px-5 py-4 rounded-2xl bg-[var(--gv-surface-base)]/75 border border-[var(--gv-border-subtle)] backdrop-blur-sm space-y-3.5 font-sans scroll-smooth"
           aria-live="polite"
         >
           {recentTurns.length === 0 && !interimUserText && !interimAssistantText ? (
-            <div className="py-4 text-center text-[var(--gv-text-tertiary)] italic font-serif">
+            <div className="py-4 text-center text-[var(--gv-text-tertiary)] italic font-serif text-sm">
               Begin speaking your thoughts. Spoken turns appear here in real time.
             </div>
           ) : (
             <>
-              {recentTurns.map((turn) => {
+              {recentTurns.map((turn, index) => {
                 const isUser = turn.role === 'user';
+                const isLatest = index === recentTurns.length - 1;
+                const isActiveSpeaking = !isUser && isLatest && presenceState === 'speaking' && !interimAssistantText;
+
                 return (
                   <div
                     key={turn.id}
-                    className={`flex flex-col space-y-1 transition-opacity ${
-                      isUser ? 'items-end text-right' : 'items-start text-left'
+                    className={`flex flex-col space-y-1 transition-all text-left items-start ${
+                      isActiveSpeaking
+                        ? 'pl-3 border-l-2 border-[var(--gv-accent)] bg-[var(--gv-accent-muted)]/10 rounded-r-lg py-1'
+                        : 'py-0.5'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 text-[10px] text-[var(--gv-text-tertiary)]">
-                      <span>{isUser ? 'You' : 'Gemini'}</span>
+                    <div className="flex items-center gap-2 text-[10px] tracking-wider uppercase font-semibold font-mono">
+                      <span className={isUser ? 'text-[var(--gv-text-tertiary)]' : 'text-[var(--gv-accent)]'}>
+                        {isUser ? 'YOU' : 'GEMINI'}
+                      </span>
                       {turn.modality === 'voice' && (
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-[var(--gv-surface-raised)] text-[var(--gv-accent)]">
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-text-tertiary)] font-normal normal-case font-sans">
                           spoken
                         </span>
                       )}
                       {turn.interrupted && (
-                        <span className="text-[9px] text-[var(--gv-text-muted)] italic">
-                          (interrupted)
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 italic normal-case font-sans">
+                          interrupted
                         </span>
                       )}
                     </div>
                     <p
-                      className={`max-w-[85%] text-xs leading-relaxed ${
+                      className={`text-sm sm:text-[15px] leading-relaxed ${
                         isUser
-                          ? 'text-[var(--gv-text-secondary)] font-sans'
-                          : 'text-[var(--gv-text-primary)] font-serif text-[13px]'
+                          ? 'text-[var(--gv-text-secondary)] font-serif'
+                          : 'text-[var(--gv-text-primary)] font-serif'
                       }`}
                     >
                       {turn.content}
@@ -266,21 +299,33 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
                 );
               })}
 
-              {/* Live Interim User Transcript */}
+              {/* Live Interim User Transcript Preview */}
               {interimUserText && (
-                <div className="flex flex-col items-end text-right space-y-1 animate-in fade-in duration-100">
-                  <span className="text-[10px] text-[var(--gv-accent)] font-medium">You (speaking…)</span>
-                  <p className="max-w-[85%] text-xs text-[var(--gv-text-primary)] leading-relaxed font-sans">
+                <div className="flex flex-col space-y-1 text-left items-start animate-in fade-in duration-100 py-1 pl-3 border-l-2 border-[var(--gv-text-tertiary)] bg-[var(--gv-surface-raised)]/30 rounded-r-lg">
+                  <div className="flex items-center gap-1.5 text-[10px] tracking-wider uppercase font-semibold font-mono text-[var(--gv-text-secondary)]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse" />
+                    <span>YOU</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-text-tertiary)] font-normal normal-case font-sans">
+                      speaking…
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-[15px] text-[var(--gv-text-primary)] leading-relaxed font-serif italic opacity-90">
                     {interimUserText}
                   </p>
                 </div>
               )}
 
-              {/* Live Interim Assistant Transcript */}
+              {/* Live Interim Assistant Transcript Preview */}
               {interimAssistantText && (
-                <div className="flex flex-col items-start text-left space-y-1 animate-in fade-in duration-100">
-                  <span className="text-[10px] text-[var(--gv-accent)] font-medium">Gemini (speaking…)</span>
-                  <p className="max-w-[85%] text-[13px] text-[var(--gv-text-primary)] leading-relaxed font-serif">
+                <div className="flex flex-col space-y-1 text-left items-start animate-in fade-in duration-100 py-1 pl-3 border-l-2 border-[var(--gv-accent)] bg-[var(--gv-accent-muted)]/10 rounded-r-lg">
+                  <div className="flex items-center gap-1.5 text-[10px] tracking-wider uppercase font-semibold font-mono text-[var(--gv-accent)]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse" />
+                    <span>GEMINI</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-[var(--gv-surface-raised)] border border-[var(--gv-border-subtle)] text-[var(--gv-accent)] font-normal normal-case font-sans">
+                      speaking…
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-[15px] text-[var(--gv-text-primary)] leading-relaxed font-serif">
                     {interimAssistantText}
                   </p>
                 </div>
@@ -298,7 +343,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
             type="button"
             id="voice-mic-btn"
             onClick={toggleMute}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 ${
               isMuted
                 ? 'bg-rose-900/70 text-rose-200 border border-rose-700'
                 : 'bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)]'
@@ -315,7 +360,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
             type="button"
             id="voice-text-btn"
             onClick={onReturnToText}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] text-xs font-medium transition cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-surface-raised)] hover:bg-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] border border-[var(--gv-border-subtle)] text-xs font-medium transition-all duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2"
             title="Return to text keyboard reflection (Escape)"
           >
             <Keyboard className="w-4 h-4" />
@@ -329,7 +374,7 @@ export const VoiceStudioView: React.FC<VoiceStudioViewProps> = ({
             type="button"
             id="voice-conclude-btn"
             onClick={onConcludeSession}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-accent)] hover:opacity-90 text-white text-xs font-semibold transition cursor-pointer shadow-xs"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gv-accent)] hover:opacity-90 text-white text-xs font-semibold transition-all duration-150 cursor-pointer shadow-xs active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2"
             title="Conclude reflection and review memories"
           >
             <CheckCircle2 className="w-4 h-4" />
